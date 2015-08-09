@@ -1798,11 +1798,12 @@ static inline void set_next_task(struct rq *rq, struct task_struct *next)
 	next->sched_class->set_next_task(rq, next, false);
 }
 
-#ifdef CONFIG_SMP
-#define sched_class_highest (&stop_sched_class)
-#else
-#define sched_class_highest (&dl_sched_class)
-#endif
+/* Yes, this is conceptually wrong; this should be below the stop-machine class
+ * if CONFIG_SMP, but existing plugins (that predate the stop-machine class)
+ * depend on the assumption that LITMUS^RT plugins are the top scheduling class
+ * (FIXME).
+ */
+#define sched_class_highest (&litmus_sched_class)
 
 #define for_class_range(class, _from, _to) \
 	for (class = (_from); class != (_to); class = class->next)
@@ -1810,6 +1811,7 @@ static inline void set_next_task(struct rq *rq, struct task_struct *next)
 #define for_each_class(class) \
 	for_class_range(class, sched_class_highest, NULL)
 
+extern const struct sched_class litmus_sched_class;
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class dl_sched_class;
 extern const struct sched_class rt_sched_class;
