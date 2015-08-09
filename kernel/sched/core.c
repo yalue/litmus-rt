@@ -21,6 +21,7 @@
 #include "pelt.h"
 
 #include <litmus/trace.h>
+#include <litmus/sched_trace.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -3414,6 +3415,8 @@ asmlinkage __visible void schedule_tail(struct task_struct *prev)
 
 	rq = finish_task_switch(prev);
 
+	sched_trace_task_switch_to(current);
+
 	if (unlikely(sched_state_validate_switch()))
 		litmus_reschedule_local();
 
@@ -4107,12 +4110,13 @@ static void __sched notrace __schedule(bool preempt)
 	int cpu;
 
 	TS_SCHED_START;
-
 	sched_state_entered_schedule();
 
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	prev = rq->curr;
+
+	sched_trace_task_switch_away(prev);
 
 	schedule_debug(prev, preempt);
 
@@ -4196,6 +4200,7 @@ static void __sched notrace __schedule(bool preempt)
 	}
 
 	TS_SCHED2_START(prev);
+	sched_trace_task_switch_to(current);
 
 	if (unlikely(sched_state_validate_switch()))
 		litmus_reschedule_local();
