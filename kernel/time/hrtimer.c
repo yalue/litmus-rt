@@ -48,6 +48,8 @@
 
 #include "tick-internal.h"
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 /*
  * Masks for selecting the soft and hard context timers from
  * cpu_base->active
@@ -1937,7 +1939,7 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
 	u64 slack;
 
 	slack = current->timer_slack_ns;
-	if (dl_task(current) || rt_task(current))
+	if (dl_task(current) || rt_task(current) || is_realtime(current))
 		slack = 0;
 
 	hrtimer_init_sleeper_on_stack(&t, clockid, mode);

@@ -31,6 +31,8 @@
 #include "rwsem.h"
 #include "lock_events.h"
 
+#include <litmus/litmus.h> /* for is_realtime() */
+
 /*
  * The least significant 3 bits of the owner value has the following
  * meanings when set.
@@ -888,7 +890,7 @@ static bool rwsem_optimistic_spin(struct rw_semaphore *sem, bool wlock)
 		if (owner_state != OWNER_WRITER) {
 			if (need_resched())
 				break;
-			if (rt_task(current) &&
+			if ((rt_task(current) || is_realtime(current)) &&
 			   (prev_owner_state != OWNER_WRITER))
 				break;
 		}
@@ -1258,6 +1260,7 @@ wait:
 			 * until rwsem_try_write_lock() is called.
 			 */
 			if ((wstate == WRITER_FIRST) && (rt_task(current) ||
+			    is_realtime(current) ||
 			    time_after(jiffies, waiter.timeout))) {
 				wstate = WRITER_HANDOFF;
 				lockevent_inc(rwsem_wlock_handoff);
