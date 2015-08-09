@@ -1163,7 +1163,10 @@ struct task_struct {
 	unsigned long			dirty_paused_when;
 
 	/* LITMUS RT parameters and state */
-	struct rt_param rt_param;
+	struct rt_param			rt_param;
+
+	/* references to PI semaphores, etc. */
+	struct od_table_entry		*od_table;
 
 #ifdef CONFIG_LATENCYTOP
 	int				latency_record_count;
