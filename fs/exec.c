@@ -64,6 +64,8 @@
 #include <linux/compat.h>
 #include <linux/vmalloc.h>
 
+#include <litmus/litmus.h>
+
 #include <linux/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
@@ -1796,6 +1798,7 @@ static int __do_execve_file(int fd, struct filename *filename,
 		goto out_unmark;
 
 	sched_exec();
+	litmus_exec();
 
 	bprm->file = file;
 	if (!filename) {
