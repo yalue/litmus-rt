@@ -72,6 +72,13 @@ atomic_t ignore_console_lock_warning __read_mostly = ATOMIC_INIT(0);
 EXPORT_SYMBOL(ignore_console_lock_warning);
 
 /*
+ * divert printk() messages when there is a LITMUS^RT debug listener
+ */
+#include <litmus/debug_trace.h>
+int trace_override = 0;
+int trace_recurse  = 0;
+
+/*
  * Low level drivers may need that to know if they can schedule in
  * their unblank() callback or not. So let's export it.
  */
@@ -1944,6 +1951,10 @@ int vprintk_store(int facility, int level,
 	 */
 	text_len = vscnprintf(text, sizeof(textbuf), fmt, args);
 
+	/* if LITMUS^RT tracer is active divert printk() msgs */
+	if (trace_override && !trace_recurse)
+		TRACE("%s", text);
+
 	/* mark and strip a trailing newline */
 	if (text_len && text[text_len-1] == '\n') {
 		text_len--;
@@ -3001,7 +3012,7 @@ void wake_up_klogd(void)
 		return;
 
 	preempt_disable();
-	if (waitqueue_active(&log_wait)) {
+	if (!trace_override && waitqueue_active(&log_wait)) {
 		this_cpu_or(printk_pending, PRINTK_PENDING_WAKEUP);
 		irq_work_queue(this_cpu_ptr(&wake_up_klogd_work));
 	}
