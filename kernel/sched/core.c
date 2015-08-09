@@ -24,6 +24,7 @@
 #include <litmus/litmus.h>
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
+#include <litmus/sched_plugin.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -4870,7 +4871,9 @@ static void __setscheduler(struct rq *rq, struct task_struct *p,
 	if (keep_boost)
 		p->prio = rt_effective_prio(p, p->prio);
 
-	if (dl_prio(p->prio))
+	if (p->policy == SCHED_LITMUS)
+		p->sched_class = &litmus_sched_class;
+	else if (dl_prio(p->prio))
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
@@ -4907,6 +4910,7 @@ static int __sched_setscheduler(struct task_struct *p,
 	int reset_on_fork;
 	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
 	struct rq *rq;
+	int litmus_task = 0;
 
 	/* The pi code expects interrupts enabled */
 	BUG_ON(pi && in_interrupt());
@@ -4935,6 +4939,8 @@ recheck:
 		return -EINVAL;
 	if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
 	    (rt_policy(policy) != (attr->sched_priority != 0)))
+		return -EINVAL;
+	if (policy == SCHED_LITMUS && policy == p->policy)
 		return -EINVAL;
 
 	/*
@@ -5000,6 +5006,12 @@ recheck:
 	/* Update task specific "requested" clamps */
 	if (attr->sched_flags & SCHED_FLAG_UTIL_CLAMP) {
 		retval = uclamp_validate(p, attr);
+		if (retval)
+			return retval;
+	}
+
+	if (policy == SCHED_LITMUS) {
+		retval = litmus_admit_task(p);
 		if (retval)
 			return retval;
 	}
@@ -5096,6 +5108,11 @@ change:
 		goto unlock;
 	}
 
+	if (is_realtime(p)) {
+		litmus_exit_task(p);
+		litmus_task = 1;
+	}
+
 	p->sched_reset_on_fork = reset_on_fork;
 	oldprio = p->prio;
 
@@ -5124,6 +5141,16 @@ change:
 	__setscheduler(rq, p, attr, pi);
 	__setscheduler_uclamp(p, attr);
 
+	if (litmus_policy(policy)) {
+#ifdef CONFIG_SMP
+		p->rt_param.stack_in_use = running ? rq->cpu : NO_CPU;
+#else
+		p->rt_param.stack_in_use = running ? 0 : NO_CPU;
+#endif
+		p->rt_param.present = running;
+		litmus->task_new(p, queued, running);
+	}
+
 	if (queued) {
 		/*
 		 * We enqueue to tail when the priority of a task is
@@ -5151,6 +5178,9 @@ change:
 	/* Run balance callbacks after we've adjusted the PI chain: */
 	balance_callback(rq);
 	preempt_enable();
+
+	if (litmus_task)
+		litmus_dealloc(p);
 
 	return 0;
 
