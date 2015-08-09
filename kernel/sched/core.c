@@ -20,6 +20,8 @@
 
 #include "pelt.h"
 
+#include <litmus/trace.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
@@ -4097,6 +4099,8 @@ static void __sched notrace __schedule(bool preempt)
 	struct rq *rq;
 	int cpu;
 
+	TS_SCHED_START;
+
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	prev = rq->curr;
@@ -4167,15 +4171,20 @@ static void __sched notrace __schedule(bool preempt)
 		++*switch_count;
 
 		trace_sched_switch(preempt, prev, next);
-
+		TS_SCHED_END(next);
+		TS_CXS_START(next);
 		/* Also unlocks the rq: */
 		rq = context_switch(rq, prev, next, &rf);
+		TS_CXS_END(current);
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
+		TS_SCHED_END(prev);
 		rq_unlock_irq(rq, &rf);
 	}
 
+	TS_SCHED2_START(prev);
 	balance_callback(rq);
+	TS_SCHED2_END(prev);
 }
 
 void __noreturn do_task_dead(void)
