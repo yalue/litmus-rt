@@ -32,6 +32,8 @@
 #include <linux/posix-timers.h>
 #include <linux/rseq.h>
 
+#include <litmus/rt_param.h>
+
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
 struct backing_dev_info;
@@ -1159,6 +1161,9 @@ struct task_struct {
 	int				nr_dirtied_pause;
 	/* Start of a write-and-pause period: */
 	unsigned long			dirty_paused_when;
+
+	/* LITMUS RT parameters and state */
+	struct rt_param rt_param;
 
 #ifdef CONFIG_LATENCYTOP
 	int				latency_record_count;
