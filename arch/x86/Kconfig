@@ -2974,6 +2974,6 @@ source "drivers/firmware/Kconfig"
 source "arch/x86/kvm/Kconfig"
 
 config ARCH_HAS_FEATHER_TRACE
-	def_bool n
+	def_bool y
 
 source "litmus/Kconfig"
