@@ -612,6 +612,8 @@ is_uncached_acl(struct posix_acl *acl)
 	return (long)acl & 1;
 }
 
+struct inode_obj_id_table;
+
 #define IOP_FASTPERM	0x0001
 #define IOP_LOOKUP	0x0002
 #define IOP_NOFOLLOW	0x0004
@@ -734,6 +736,9 @@ struct inode {
 #ifdef CONFIG_FS_VERITY
 	struct fsverity_info	*i_verity_info;
 #endif
+
+	struct list_head	i_obj_list;
+	struct mutex		i_obj_mutex;
 
 	void			*i_private; /* fs or device private pointer */
 } __randomize_layout;
