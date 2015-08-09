@@ -4046,7 +4046,12 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	 * call that function directly, but only if the @prev task wasn't of a
 	 * higher scheduling class, because otherwise those loose the
 	 * opportunity to pull in more work from other CPUs.
-	 */
+	 *
+	 * NOT IN LITMUS^RT!
+	 *
+	 * This breaks many assumptions in the plugins.
+	 * Do not uncomment without thinking long and hard
+	 * about how this affects global plugins such as GSN-EDF.
 	if (likely((prev->sched_class == &idle_sched_class ||
 		    prev->sched_class == &fair_sched_class) &&
 		   rq->nr_running == rq->cfs.h_nr_running)) {
@@ -4055,14 +4060,14 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 		if (unlikely(p == RETRY_TASK))
 			goto restart;
 
-		/* Assumes fair_sched_class->next == idle_sched_class */
+		// Assumes fair_sched_class->next == idle_sched_class
 		if (unlikely(!p))
 			p = idle_sched_class.pick_next_task(rq, prev, rf);
 
 		return p;
 	}
 
-restart:
+restart: */
 #ifdef CONFIG_SMP
 	/*
 	 * We must do the balancing pass before put_next_task(), such
