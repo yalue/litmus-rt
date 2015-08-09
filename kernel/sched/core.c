@@ -20,6 +20,8 @@
 
 #include "pelt.h"
 
+#include <litmus/debug_trace.h>
+#include <litmus/litmus.h>
 #include <litmus/trace.h>
 #include <litmus/sched_trace.h>
 
@@ -2492,7 +2494,12 @@ static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
 	struct rq_flags rf;
 
 #if defined(CONFIG_SMP)
-	if (sched_feat(TTWU_QUEUE) && !cpus_share_cache(smp_processor_id(), cpu)) {
+	/*
+	 * LITMUS^RT: plugins determine whether to send an IPI to the remote
+	 * CPU.
+	 */
+	if (!is_realtime(p) && sched_feat(TTWU_QUEUE) &&
+	    !cpus_share_cache(smp_processor_id(), cpu)) {
 		sched_clock_cpu(cpu); /* Sync clocks across CPUs */
 		ttwu_queue_remote(p, cpu, wake_flags);
 		return;
@@ -2613,6 +2620,9 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	unsigned long flags;
 	int cpu, success = 0;
 
+	if (is_realtime(p))
+		TRACE_TASK(p, "try_to_wake_up() state:%d\n", p->state);
+
 	preempt_disable();
 	if (p == current) {
 		/*
@@ -2711,6 +2721,12 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 */
 	smp_cond_load_acquire(&p->on_cpu, !VAL);
 
+	/* LITMUS^RT: once the task can be safely referenced by this
+	 * CPU, don't mess with Linux load balancing stuff.
+	 */
+	if (is_realtime(p))
+		goto litmus_out_activate;
+
 	p->sched_contributes_to_load = !!task_contributes_to_load(p);
 	p->state = TASK_WAKING;
 
@@ -2726,6 +2742,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		set_task_cpu(p, cpu);
 	}
 
+litmus_out_activate:
 #else /* CONFIG_SMP */
 
 	if (p->in_iowait) {
@@ -2741,6 +2758,9 @@ unlock:
 out:
 	if (success)
 		ttwu_stat(p, cpu, wake_flags);
+	if (is_realtime(p))
+		TRACE_TASK(p, "try_to_wake_up() done state:%d success:%d\n",
+			   p->state, success);
 	preempt_enable();
 
 	return success;
