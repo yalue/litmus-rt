@@ -42,6 +42,9 @@
 #include <linux/freezer.h>
 #include <linux/compat.h>
 
+#include <litmus/debug_trace.h>
+#include <litmus/trace.h>
+
 #include <linux/uaccess.h>
 
 #include <trace/events/timer.h>
@@ -1786,7 +1789,15 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 
 	t->task = NULL;
 	if (task)
+	{
+		if (is_realtime(task))
+		{
+			ktime_t expires = hrtimer_get_expires(timer);
+			lt_t intended_release = ktime_to_ns(expires);
+			TS_RELEASE_LATENCY(intended_release);
+		}
 		wake_up_process(task);
+	}
 
 	return HRTIMER_NORESTART;
 }
