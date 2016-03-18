@@ -123,6 +123,9 @@ struct hrtimer {
 	u8				is_rel;
 	u8				is_soft;
 	u8				is_hard;
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	ktime_t				when_added;
+#endif
 };
 
 /**

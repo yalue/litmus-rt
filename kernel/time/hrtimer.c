@@ -1118,6 +1118,10 @@ static int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 
 	tim = hrtimer_update_lowres(timer, tim, mode);
 
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	timer->when_added = base->get_time();
+#endif
+
 	hrtimer_set_expires_range_ns(timer, tim, delta_ns);
 
 	/* Switch the timer base, if necessary: */
@@ -1572,6 +1576,9 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 {
 	struct hrtimer_clock_base *base;
 	unsigned int active = cpu_base->active_bases & active_mask;
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	ktime_t was_exp_nxt = cpu_base->expires_next;
+#endif
 
 	for_each_active_base(base, cpu_base, active) {
 		struct timerqueue_node *node;
@@ -1598,6 +1605,26 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 			 */
 			if (basenow < hrtimer_get_softexpires_tv64(timer))
 				break;
+
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+			if (cpu_base->hres_active && (basenow >=
+			     hrtimer_get_expires_tv64(timer) +
+			     ((s64) CONFIG_REPORT_TIMER_LATENCY_THRESHOLD))) {
+				printk_ratelimited(KERN_WARNING
+				    "WARNING: P%d timer latency:%lld now:%lld "
+				    "basenow:%lld exp:%lld soft-exp:%lld "
+				    "nxt:%lld added:%lld "
+				    "timer:%p fn:%p"
+				    "\n",
+				    smp_processor_id(),
+				    basenow - hrtimer_get_expires_tv64(timer),
+				    now, basenow,
+				    hrtimer_get_expires_tv64(timer),
+				    hrtimer_get_softexpires_tv64(timer),
+				    was_exp_nxt, timer->when_added, timer,
+				    timer->function);
+			}
+#endif
 
 			__run_hrtimer(cpu_base, base, timer, &basenow, flags);
 			if (active_mask == HRTIMER_ACTIVE_SOFT)
