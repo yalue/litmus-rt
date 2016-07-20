@@ -1986,6 +1986,19 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
 	if (dl_task(current) || rt_task(current) || is_realtime(current))
 		slack = 0;
 
+	if (is_realtime(current)
+		&& clockid == CLOCK_MONOTONIC
+		&& mode == HRTIMER_MODE_ABS) {
+		/* special handling: to handle periodic activations
+		 * correctly despite timer interrupt jitter and overheads,
+		 * the plugin might need to know the time at which the
+		 * task intends to wake up
+		 */
+		tsk_rt(current)->doing_abs_nanosleep = 1;
+		tsk_rt(current)->nanosleep_wakeup =
+			ktime_to_ns(timespec64_to_ktime(*rqtp));
+	}
+
 	hrtimer_init_sleeper_on_stack(&t, clockid, mode);
 	hrtimer_set_expires_range_ns(&t.timer, timespec64_to_ktime(*rqtp), slack);
 	ret = do_nanosleep(&t, mode);
@@ -2004,6 +2017,9 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
 	set_restart_fn(restart, hrtimer_nanosleep_restart);
 out:
 	destroy_hrtimer_on_stack(&t.timer);
+
+	tsk_rt(current)->doing_abs_nanosleep = 0;
+
 	return ret;
 }
 
