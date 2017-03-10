@@ -2976,4 +2976,7 @@ source "arch/x86/kvm/Kconfig"
 config ARCH_HAS_FEATHER_TRACE
 	def_bool y
 
+config ARCH_CALLS_IRQ_ENTER_ON_RESCHED_IPI
+	def_bool y
+
 source "litmus/Kconfig"
