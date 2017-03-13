@@ -4137,6 +4137,8 @@ static void __sched notrace __schedule(bool preempt)
 	rq->clock_update_flags <<= 1;
 	update_rq_clock(rq);
 
+	this_cpu_write(litmus_preemption_in_progress, preempt);
+
 	switch_count = &prev->nivcsw;
 	if (!preempt && prev->state) {
 		if (signal_pending_state(prev->state, prev)) {
@@ -4155,6 +4157,8 @@ static void __sched notrace __schedule(bool preempt)
 	next = pick_next_task(rq, prev, &rf);
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
+
+	this_cpu_write(litmus_preemption_in_progress, false);
 
 	if (likely(prev != next)) {
 		rq->nr_switches++;
