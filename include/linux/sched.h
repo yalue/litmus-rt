@@ -32,6 +32,9 @@
 #include <linux/posix-timers.h>
 #include <linux/rseq.h>
 
+#include <litmus/rt_param.h>
+#include <litmus/preempt.h>
+
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
 struct backing_dev_info;
@@ -60,6 +63,8 @@ struct sighand_struct;
 struct signal_struct;
 struct task_delay_info;
 struct task_group;
+
+struct od_table_entry;
 
 /*
  * Task state bitmask. NOTE! These bits are also
@@ -1158,6 +1163,10 @@ struct task_struct {
 	/* Start of a write-and-pause period: */
 	unsigned long			dirty_paused_when;
 
+	/* LITMUS RT parameters and state */
+	struct rt_param rt_param;
+	struct od_table_entry *od_table;
+
 #ifdef CONFIG_LATENCYTOP
 	int				latency_record_count;
 	struct latency_record		latency_record[LT_SAVECOUNT];
@@ -1741,6 +1750,7 @@ static inline int test_tsk_thread_flag(struct task_struct *tsk, int flag)
 static inline void set_tsk_need_resched(struct task_struct *tsk)
 {
 	set_tsk_thread_flag(tsk,TIF_NEED_RESCHED);
+	sched_state_will_schedule(tsk);
 }
 
 static inline void clear_tsk_need_resched(struct task_struct *tsk)

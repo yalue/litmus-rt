@@ -8,6 +8,7 @@
  * See kernel/stop_machine.c
  */
 #include "sched.h"
+#include <litmus/preempt.h>
 
 #ifdef CONFIG_SMP
 static int
@@ -43,6 +44,13 @@ pick_next_task_stop(struct rq *rq, struct task_struct *prev, struct rq_flags *rf
 		return NULL;
 
 	set_next_task_stop(rq, rq->stop);
+
+	/* Let the LITMUS state machine know that a task was picked. This is
+	 * needed because the LITMUS scheduling plugin will not be called if
+	 * the stop-task class picks a task.
+	 */
+	sched_state_task_picked();
+
 	return rq->stop;
 }
 

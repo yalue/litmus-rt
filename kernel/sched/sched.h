@@ -162,6 +162,11 @@ static inline int rt_policy(int policy)
 	return policy == SCHED_FIFO || policy == SCHED_RR;
 }
 
+static inline int litmus_policy(int policy)
+{
+	return policy == SCHED_LITMUS;
+}
+
 static inline int dl_policy(int policy)
 {
 	return policy == SCHED_DEADLINE;
@@ -169,7 +174,8 @@ static inline int dl_policy(int policy)
 static inline bool valid_policy(int policy)
 {
 	return idle_policy(policy) || fair_policy(policy) ||
-		rt_policy(policy) || dl_policy(policy);
+		rt_policy(policy) || dl_policy(policy) ||
+		litmus_policy(policy);
 }
 
 static inline int task_has_idle_policy(struct task_struct *p)
@@ -685,6 +691,10 @@ struct dl_rq {
 	u64			bw_ratio;
 };
 
+struct litmus_rq {
+	unsigned long nr_running;
+};
+
 #ifdef CONFIG_FAIR_GROUP_SCHED
 /* An entity is a task if it doesn't "own" a runqueue */
 #define entity_is_task(se)	(!se->my_q)
@@ -881,6 +891,7 @@ struct rq {
 	struct cfs_rq		cfs;
 	struct rt_rq		rt;
 	struct dl_rq		dl;
+	struct litmus_rq	litmus;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this CPU: */
@@ -1783,11 +1794,19 @@ static inline void set_next_task(struct rq *rq, struct task_struct *next)
 	next->sched_class->set_next_task(rq, next);
 }
 
+/* FIXME: This is conceptually wrong; this should be below the stop-machine
+ * class, but existing plugins (that predate the stop-machine class) depend on
+ * the assumption that LITMUS^RT plugins are the top scheduling class.
+ */
+#define sched_class_highest (&litmus_sched_class)
+
+/*
 #ifdef CONFIG_SMP
 #define sched_class_highest (&stop_sched_class)
 #else
 #define sched_class_highest (&dl_sched_class)
 #endif
+*/
 
 #define for_class_range(class, _from, _to) \
 	for (class = (_from); class != (_to); class = class->next)
@@ -1795,6 +1814,7 @@ static inline void set_next_task(struct rq *rq, struct task_struct *next)
 #define for_each_class(class) \
 	for_class_range(class, sched_class_highest, NULL)
 
+extern const struct sched_class litmus_sched_class;
 extern const struct sched_class stop_sched_class;
 extern const struct sched_class dl_sched_class;
 extern const struct sched_class rt_sched_class;
