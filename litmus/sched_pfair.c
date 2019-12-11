@@ -676,7 +676,9 @@ static int safe_to_schedule(struct task_struct* t, int cpu)
 static struct task_struct* pfair_schedule(struct task_struct * prev)
 {
 	struct pfair_state* state = this_cpu_ptr(&pfair_state);
+#ifdef CONFIG_RELEASE_MASTER
 	struct pfair_cluster* cluster = cpu_cluster(state);
+#endif
 	int blocks, completion, out_of_time;
 	struct task_struct* next = NULL;
 
@@ -1072,9 +1074,9 @@ static long pfair_activate_plugin(void)
 	struct pfair_cluster* cluster;
 	quanta_t now, start;
 	int cluster_size;
-	struct cluster_cpu* cpus[NR_CPUS];
-	struct scheduling_cluster* clust[NR_CPUS];
 	lt_t quantum_timer_start;
+	struct cluster_cpu **cpus = NULL;
+	struct scheduling_cluster **clust = NULL;
 
 	cluster_size = get_cluster_size(pfair_cluster_level);
 
@@ -1087,6 +1089,24 @@ static long pfair_activate_plugin(void)
 	if (!pfair_clusters) {
 		num_pfair_clusters = 0;
 		printk(KERN_ERR "Could not allocate Pfair clusters!\n");
+		return -ENOMEM;
+	}
+
+	// NR_CPUS is big enough that trying to allocate these buffers on the
+	// stack exceeds a frame size of 2048 bytes.
+	cpus = kzalloc(sizeof(struct cluster_cpu *) * NR_CPUS, GFP_ATOMIC);
+	if (!cpus) {
+		num_pfair_clusters = 0;
+		kfree(pfair_clusters);
+		printk(KERN_ERR "Couldn't allocate temp Pfair CPU list\n");
+		return -ENOMEM;
+	}
+	clust = kzalloc(sizeof(struct scheduling_cluster *) * NR_CPUS, GFP_ATOMIC);
+	if (!clust) {
+		num_pfair_clusters = 0;
+		kfree(pfair_clusters);
+		kfree(cpus);
+		printk(KERN_ERR "Couldn't allocate temp Pfair cluster list\n");
 		return -ENOMEM;
 	}
 
@@ -1132,6 +1152,8 @@ static long pfair_activate_plugin(void)
 	err = assign_cpus_to_clusters(pfair_cluster_level, clust, num_pfair_clusters,
 				      cpus, num_online_cpus());
 
+	kfree(cpus);
+	kfree(clust);
 	if (err < 0)
 		cleanup_clusters();
 	else

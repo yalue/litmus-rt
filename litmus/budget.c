@@ -1,8 +1,9 @@
-#include <linux/sched.h>
-#include <linux/percpu.h>
 #include <linux/hrtimer.h>
-#include <linux/uaccess.h>
 #include <linux/module.h>
+#include <linux/percpu.h>
+#include <linux/sched.h>
+#include <linux/sched/clock.h>
+#include <linux/uaccess.h>
 
 #include <litmus/debug_trace.h>
 #include <litmus/litmus.h>

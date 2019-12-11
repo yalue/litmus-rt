@@ -1,7 +1,7 @@
 #include <linux/percpu.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #include <litmus/sched_plugin.h>
 #include <litmus/preempt.h>
@@ -282,7 +282,7 @@ static long pres_admit_task(struct task_struct *tsk)
 			tsk->comm, tsk->pid);
 		state = cpu_state_for(task_cpu(tsk));
 	} else {
-		state = cpu_state_for(cpumask_first(&tsk->cpus_allowed));
+		state = cpu_state_for(cpumask_first(&tsk->cpus_mask));
 	}
 
 	TRACE_TASK(tsk, "on CPU %d, valid?:%d\n",

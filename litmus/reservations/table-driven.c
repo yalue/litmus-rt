@@ -4,17 +4,6 @@
 #include <litmus/reservations/reservation.h>
 #include <litmus/reservations/table-driven.h>
 
-static lt_t td_cur_major_cycle_start(struct table_driven_reservation *tdres)
-{
-	lt_t x, tmp;
-
-	tmp = tdres->res.env->current_time - tdres->res.env->time_zero;
-	x = div64_u64(tmp, tdres->major_cycle);
-	x *= tdres->major_cycle;
-	return x;
-}
-
-
 static lt_t td_next_major_cycle_start(struct table_driven_reservation *tdres)
 {
 	lt_t x, tmp;

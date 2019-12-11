@@ -3990,9 +3990,9 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
 		return p;
 	}
+restart:
 	*/
 
-restart:
 #ifdef CONFIG_SMP
 	/*
 	 * We must do the balancing pass before put_next_task(), such
@@ -4099,7 +4099,7 @@ static void __sched notrace __schedule(bool preempt)
 	rq->clock_update_flags <<= 1;
 	update_rq_clock(rq);
 
-	this_cpu_write(litmus_preemption_in_process, preempt);
+	this_cpu_write(litmus_preemption_in_progress, preempt);
 
 	switch_count = &prev->nivcsw;
 	if (!preempt && prev->state) {

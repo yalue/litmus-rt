@@ -261,7 +261,7 @@ struct srp_semaphore* allocate_srp_semaphore(void)
 	return sem;
 }
 
-static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
+static int srp_wake_up(wait_queue_entry_t *wait, unsigned mode, int sync,
 		       void *key)
 {
 	int cpu = smp_processor_id();
@@ -276,10 +276,10 @@ static int srp_wake_up(wait_queue_t *wait, unsigned mode, int sync,
 
 static void do_ceiling_block(struct task_struct *tsk)
 {
-	wait_queue_t wait = {
+	struct wait_queue_entry wait = {
 		.private   = tsk,
 		.func      = srp_wake_up,
-		.task_list = {NULL, NULL}
+		.entry = {NULL, NULL}
 	};
 
 	tsk->state = TASK_UNINTERRUPTIBLE;

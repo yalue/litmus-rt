@@ -61,11 +61,10 @@ static void litmus_ctrl_vm_close(struct vm_area_struct* vma)
 		  vma->vm_private_data);
 }
 
-static int litmus_ctrl_vm_fault(struct vm_area_struct* vma,
-				      struct vm_fault* vmf)
+static vm_fault_t litmus_ctrl_vm_fault(struct vm_fault* vmf)
 {
 	TRACE_CUR("%s flags=0x%x (off:%ld)\n", __FUNCTION__,
-		  vma->vm_flags, vmf->pgoff);
+		  vmf->vma->vm_flags, vmf->pgoff);
 
 	/* This function should never be called, since all pages should have
 	 * been mapped by mmap() already. */
@@ -186,6 +185,8 @@ static long litmus_ctrl_ioctl(struct file *filp,
 				syscall_args.od_open.obj_id,
 				syscall_args.od_open.config);
 		}
+		printk(KERN_DEBUG "Weird litmus od_open cmd: %d\n", cmd);
+		return -EINVAL;
 
 
 	case LRT_null_call:

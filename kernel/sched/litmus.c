@@ -264,10 +264,15 @@ static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
  * return the next task to be scheduled
  */
 static struct task_struct *pick_next_task_litmus(struct rq *rq,
-	struct task_struct *prev, struct pin_cookie cookie)
+	struct task_struct *prev, struct rq_flags *rf)
 {
 	struct task_struct *next;
-
+	// I don't know if this is correct, but rf may be NULL according to
+	// sched.h, so I'm hoping NIL_COOKIE is safe to use in that case.
+	struct pin_cookie cookie = NIL_COOKIE;
+	if (rf) {
+		cookie = rf->cookie;
+	}
 	if (is_realtime(prev))
 		update_time_litmus(rq, prev);
 
@@ -323,9 +328,9 @@ unsigned int get_rr_interval_litmus(struct rq *rq, struct task_struct *p)
  * mutex inheritance yet (and probably never will). Use LITMUS provided
  * synchronization primitives instead.
  */
-static void set_curr_task_litmus(struct rq *rq)
+static void set_next_task_litmus(struct rq *rq, struct task_struct *p)
 {
-	rq->curr->se.exec_start = rq->clock;
+	p->se.exec_start = rq->clock;
 }
 
 
@@ -374,7 +379,7 @@ const struct sched_class litmus_sched_class = {
 	.select_task_rq		= select_task_rq_litmus,
 #endif
 
-	.set_curr_task          = set_curr_task_litmus,
+	.set_next_task		= set_next_task_litmus,
 	.task_tick		= task_tick_litmus,
 
 	.get_rr_interval	= get_rr_interval_litmus,

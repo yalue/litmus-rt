@@ -3,17 +3,19 @@
  *             the LITMUS intialization code,
  *             and the procfs interface..
  */
-#include <asm/uaccess.h>
-#include <linux/uaccess.h>
-#include <linux/sysrq.h>
-#include <linux/sched.h>
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <linux/reboot.h>
-#include <linux/stop_machine.h>
-#include <linux/sched/rt.h>
-#include <linux/rwsem.h>
 #include <linux/interrupt.h>
+#include <linux/module.h>
+#include <linux/reboot.h>
+#include <linux/rwsem.h>
+#include <linux/sched.h>
+#include <linux/sched/rt.h>
+#include <linux/sched/signal.h>
+#include <linux/sched/task.h>
+#include <linux/slab.h>
+#include <linux/stop_machine.h>
+#include <linux/sysrq.h>
+#include <linux/uaccess.h>
+#include <uapi/linux/sched/types.h>
 
 #include <litmus/debug_trace.h>
 #include <litmus/litmus.h>
@@ -634,15 +636,19 @@ int litmus_be_migrate_to(int cpu)
 }
 
 #ifdef CONFIG_MAGIC_SYSRQ
-int sys_kill(int pid, int sig);
+int send_sig(int sig, struct task_struct *p, int priv);
 
 static void sysrq_handle_kill_rt_tasks(int key)
 {
 	struct task_struct *t;
+	int result;
 	read_lock(&tasklist_lock);
 	for_each_process(t) {
 		if (is_realtime(t)) {
-			sys_kill(t->pid, SIGKILL);
+			result = send_sig(SIGKILL, t, 0);
+			if (result != 0) {
+				printk("Unable to kill RT task.\n");
+			}
 		}
 	}
 	read_unlock(&tasklist_lock);

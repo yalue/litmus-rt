@@ -127,12 +127,12 @@ asmlinkage long sys_litmus_unlock(int lock_od)
 
 struct task_struct* __waitqueue_remove_first(wait_queue_head_t *wq)
 {
-	wait_queue_t* q;
+	wait_queue_entry_t* q;
 	struct task_struct* t = NULL;
 
 	if (waitqueue_active(wq)) {
-		q = list_entry(wq->task_list.next,
-			       wait_queue_t, task_list);
+		q = list_entry(wq->head.next,
+			       wait_queue_entry_t, entry);
 		t = (struct task_struct*) q->private;
 		__remove_wait_queue(wq, q);
 	}
@@ -149,15 +149,15 @@ unsigned int __add_wait_queue_prio_exclusive(
 	new->wq.flags |= WQ_FLAG_EXCLUSIVE;
 
 	/* find a spot where the new entry is less than the next */
-	list_for_each(pos, &head->task_list) {
+	list_for_each(pos, &head->head) {
 		prio_wait_queue_t* queued = list_entry(pos, prio_wait_queue_t,
-						       wq.task_list);
+			wq.entry);
 
 		if (unlikely(lt_before(new->priority, queued->priority) ||
 			     (new->priority == queued->priority &&
 			      new->tie_breaker < queued->tie_breaker))) {
 			/* pos is not less than new, thus insert here */
-			__list_add(&new->wq.task_list, pos->prev, pos);
+			__list_add(&new->wq.entry, pos->prev, pos);
 			goto out;
 		}
 		passed++;
@@ -166,7 +166,7 @@ unsigned int __add_wait_queue_prio_exclusive(
 	/* if we get to this point either the list is empty or every entry
 	 * queued element is less than new.
 	 * Let's add new to the end. */
-	list_add_tail(&new->wq.task_list, &head->task_list);
+	list_add_tail(&new->wq.entry, &head->head);
 out:
 	return passed;
 }

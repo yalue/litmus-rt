@@ -394,7 +394,7 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 {
 	struct task_struct* t = current;
 	struct fmlp_semaphore *sem = fmlp_from_lock(l);
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	unsigned long flags;
 
 	if (!is_realtime(t))
@@ -413,9 +413,10 @@ int psnedf_fmlp_lock(struct litmus_lock* l)
 		init_waitqueue_entry(&wait, t);
 
 		/* FIXME: interruptible would be nice some day */
-		set_task_state(t, TASK_UNINTERRUPTIBLE);
+		set_current_state(TASK_UNINTERRUPTIBLE);
 
-		__add_wait_queue_tail_exclusive(&sem->wait, &wait);
+		wait.flags |= WQ_FLAG_EXCLUSIVE;
+		__add_wait_queue_entry_tail(&sem->wait, &wait);
 
 		TS_LOCK_SUSPEND;
 

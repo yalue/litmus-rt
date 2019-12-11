@@ -2,13 +2,13 @@
  *
  *
  */
-
-#include <asm/atomic.h>
-#include <asm/uaccess.h>
-#include <linux/spinlock.h>
+#include <linux/completion.h>
 #include <linux/list.h>
 #include <linux/sched.h>
-#include <linux/completion.h>
+#include <linux/spinlock.h>
+#include <linux/uaccess.h>
+#include <asm/atomic.h>
+#include <asm/current.h>
 
 #include <litmus/litmus.h>
 #include <litmus/sched_plugin.h>

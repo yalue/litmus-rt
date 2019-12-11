@@ -1,12 +1,13 @@
-#include <linux/sched.h>
-#include <linux/fs.h>
-#include <linux/slab.h>
 #include <linux/cdev.h>
-#include <asm/uaccess.h>
-#include <linux/module.h>
 #include <linux/device.h>
-#include <linux/vmalloc.h>
+#include <linux/fs.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/sched.h>
+#include <linux/sched/signal.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/vmalloc.h>
 
 #include <litmus/feather_trace.h>
 #include <litmus/ftdev.h>

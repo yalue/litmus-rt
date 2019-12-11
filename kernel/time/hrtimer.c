@@ -1585,7 +1585,7 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 				break;
 
 #ifdef CONFIG_REPORT_TIMER_LATENCY
-			if (cpu_base->hres_active && (basenow.tv64 >=
+			if (cpu_base->hres_active && (basenow >=
 				hrtimer_get_expires_tv64(timer) +
 				((s64) CONFIG_REPORT_TIMER_LATENCY_THRESHOLD))) {
 				printk_ratelimited(KERN_WARNING "WARNING: "
@@ -1594,12 +1594,12 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 					"nxt:%lld added:%lld "
 					"timer:%p fn:%p\n",
 					smp_processor_id(),
-					basenow.tv64 - hrtimer_get_expires_tv64(timer),
-					now.tv64, basenow.tv64,
+					basenow - hrtimer_get_expires_tv64(timer),
+					now, basenow,
 					hrtimer_get_expires_tv64(timer),
 					hrtimer_get_softexpires(timer),
-					was_exp_nxt.tv64,
-					timer->when_added.tv64,
+					was_exp_nxt,
+					timer->when_added,
 					timer, timer->function);
 			}
 #endif
@@ -1807,8 +1807,8 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 			ktime_t expires = hrtimer_get_expires(timer);
 			/* Fix up timers that were added past their due date,
 			 * because that's not really release latency. */
-			lt_t intended_release = max(expires.tv64,
-				timer->when_added.tv64);
+			lt_t intended_release = max(expires,
+				timer->when_added);
 			TS_RELEASE_LATENCY(intended_release);
 		}
 #endif
@@ -1978,7 +1978,7 @@ long hrtimer_nanosleep(const struct timespec64 *rqtp,
 		 * know the time at which the task intends to wake up. */
 		tsk_rt(current)->doing_abs_nanosleep = 1;
 		tsk_rt(current)->nanosleep_wakeup = ktime_to_ns(
-			timespec_to_ktime(*rqtp));
+			timespec64_to_ktime(*rqtp));
 	}
 
 	hrtimer_init_sleeper_on_stack(&t, clockid, mode);

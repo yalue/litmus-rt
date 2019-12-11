@@ -12,6 +12,8 @@
 #include <linux/percpu.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/sched/topology.h>
+#include <linux/wait.h>
 
 #include <litmus/debug_trace.h>
 #include <litmus/litmus.h>
@@ -744,9 +746,9 @@ struct task_struct* find_hp_waiter(struct fmlp_semaphore *sem,
 	struct list_head	*pos;
 	struct task_struct 	*queued, *found = NULL;
 
-	list_for_each(pos, &sem->wait.task_list) {
-		queued  = (struct task_struct*) list_entry(pos, wait_queue_t,
-							   task_list)->private;
+	list_for_each(pos, &sem->wait.head) {
+		queued  = (struct task_struct*) list_entry(pos,
+			wait_queue_entry_t, entry)->private;
 
 		/* Compare task prios, find high prio task. */
 		if (queued != skip && edf_higher_prio(queued, found))
@@ -759,7 +761,7 @@ int gsnedf_fmlp_lock(struct litmus_lock* l)
 {
 	struct task_struct* t = current;
 	struct fmlp_semaphore *sem = fmlp_from_lock(l);
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	unsigned long flags;
 
 	if (!is_realtime(t))
@@ -777,9 +779,10 @@ int gsnedf_fmlp_lock(struct litmus_lock* l)
 		init_waitqueue_entry(&wait, t);
 
 		/* FIXME: interruptible would be nice some day */
-		set_task_state(t, TASK_UNINTERRUPTIBLE);
+		set_current_state(TASK_UNINTERRUPTIBLE);
 
-		__add_wait_queue_tail_exclusive(&sem->wait, &wait);
+		wait.flags |= WQ_FLAG_EXCLUSIVE;
+		__add_wait_queue_entry_tail(&sem->wait, &wait);
 
 		/* check if we need to activate priority inheritance */
 		if (edf_higher_prio(t, sem->hp_waiter)) {

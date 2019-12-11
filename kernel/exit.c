@@ -736,7 +736,7 @@ void __noreturn do_exit(long code)
 		 * RT mode first.
 		 */
 		litmus_do_exit(tsk);
-		BUG_ON(is_realtime(tsk);
+		BUG_ON(is_realtime(tsk));
 	}
 
 	/*

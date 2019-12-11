@@ -6,6 +6,7 @@
 #ifndef _LINUX_LITMUS_H_
 #define _LINUX_LITMUS_H_
 
+#include <linux/smp.h>
 #include <litmus/ctrlpage.h>
 
 #ifdef CONFIG_RELEASE_MASTER
@@ -211,7 +212,7 @@ struct hrtimer_start_on_info {
 	struct hrtimer		*timer;
 	ktime_t			time;
 	enum hrtimer_mode	mode;
-	struct call_single_data csd;
+	call_single_data_t	csd;
 };
 
 void hrtimer_pull(void *csd_info);

@@ -2,6 +2,7 @@
 #define __LITMUS_AFFINITY_H
 
 #include <linux/cpumask.h>
+#include <linux/sched/topology.h>
 
 /* Works like:
 void get_nearest_available_cpu(

@@ -46,13 +46,14 @@ const char* sched_state_name(int s);
 #define TRACE_STATE(fmt, args...) /* ignore */
 #endif
 
-#define VERIFY_SCHED_STATE(x)						\
-	do { int __s = get_sched_state();				\
-		if ((__s & (x)) == 0)					\
-			TRACE_STATE("INVALID s=0x%x (%s) not "		\
-				    "in 0x%x (%s) [%s]\n",		\
-				    __s, sched_state_name(__s),		\
-				    (x), #x, __FUNCTION__);		\
+#define VERIFY_SCHED_STATE(x)					\
+	do { int __s = get_sched_state();			\
+		if ((__s & (x)) == 0) {				\
+			TRACE_STATE("INVALID s=0x%x (%s) not "	\
+				    "in 0x%x (%s) [%s]\n",	\
+				    __s, sched_state_name(__s),	\
+				    (x), #x, __FUNCTION__);	\
+		}						\
 	} while (0);
 
 #define TRACE_SCHED_STATE_CHANGE(x, y, cpu)				\
@@ -168,9 +169,10 @@ static inline int sched_state_validate_switch(void)
 		decision_ok = sched_state_transition(TASK_PICKED, TASK_SCHEDULED);
 	}
 
-	if (!decision_ok)
+	if (!decision_ok) {
 		TRACE_STATE("validation failed (%s)\n",
 			sched_state_name(get_sched_state()));
+	}
 
 	return !decision_ok;
 }
