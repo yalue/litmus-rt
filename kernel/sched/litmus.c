@@ -273,7 +273,7 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq,
 	if (rf) {
 		cookie = rf->cookie;
 	}
-	if (is_realtime(prev))
+	if (prev && is_realtime(prev))
 		update_time_litmus(rq, prev);
 
 	lockdep_unpin_lock(&rq->lock, cookie);
@@ -291,7 +291,7 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq,
 	 * provide a task, and if we find one, call put_prev_task() on the
 	 * previously scheduled task.
 	 */
-	if (next)
+	if (next && prev)
 		put_prev_task(rq, prev);
 
 	return next;
