@@ -419,9 +419,9 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	raw_spin_lock(&cluster->cluster_lock);
 
 	/* sanity checking */
-	BUG_ON(entry->scheduled && entry->scheduled != prev);
-	BUG_ON(entry->scheduled && !is_realtime(prev));
-	BUG_ON(is_realtime(prev) && !entry->scheduled);
+	BUG_ON(entry->scheduled && prev && entry->scheduled != prev);
+	BUG_ON(entry->scheduled && prev && !is_realtime(prev));
+	BUG_ON(prev && is_realtime(prev) && !entry->scheduled);
 
 	/* (0) Determine state */
 	exists      = entry->scheduled != NULL;
@@ -432,8 +432,14 @@ static struct task_struct* cedf_schedule(struct task_struct * prev)
 	sleep	    = exists && is_completed(entry->scheduled);
 	preempt     = entry->scheduled != entry->linked;
 
+	if (exists && (prev == NULL)) {
+		prev = entry->scheduled;
+	}
+
 #ifdef WANT_ALL_SCHED_EVENTS
-	TRACE_TASK(prev, "invoked cedf_schedule.\n");
+	if (prev) {
+		TRACE_TASK(prev, "invoked cedf_schedule.\n");
+	}
 #endif
 
 	if (exists)

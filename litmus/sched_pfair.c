@@ -693,12 +693,12 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 
 	raw_spin_lock(cpu_lock(state));
 
-	blocks      = is_realtime(prev) && !is_current_running();
-	completion  = is_realtime(prev) && is_completed(prev);
-	out_of_time = is_realtime(prev) && time_after(cur_release(prev),
-						      state->local_tick);
+	blocks      = prev && is_realtime(prev) && !is_current_running();
+	completion  = prev && is_realtime(prev) && is_completed(prev);
+	out_of_time = prev && is_realtime(prev) &&
+		time_after(cur_release(prev), state->local_tick);
 
-	if (is_realtime(prev))
+	if (prev && is_realtime(prev))
 	    PTRACE_TASK(prev, "blocks:%d completion:%d out_of_time:%d\n",
 			blocks, completion, out_of_time);
 
@@ -716,7 +716,8 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 		next = state->local;
 
 	if (prev != next) {
-		tsk_rt(prev)->scheduled_on = NO_CPU;
+		if (prev)
+			tsk_rt(prev)->scheduled_on = NO_CPU;
 		if (next)
 			tsk_rt(next)->scheduled_on = cpu_id(state);
 	}
@@ -726,7 +727,7 @@ static struct task_struct* pfair_schedule(struct task_struct * prev)
 	if (next)
 		TRACE_TASK(next, "scheduled rel=%lu at %lu (%llu)\n",
 			   tsk_pfair(next)->release, cpu_cluster(state)->pfair_time, litmus_clock());
-	else if (is_realtime(prev))
+	else if (prev && is_realtime(prev))
 		TRACE("Becomes idle at %lu (%llu)\n", cpu_cluster(state)->pfair_time, litmus_clock());
 
 #ifdef CONFIG_RELEASE_MASTER
