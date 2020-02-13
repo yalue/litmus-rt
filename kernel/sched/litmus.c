@@ -50,9 +50,14 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 
 	sched_state_plugin_check();
 
+	if (!next) {
+		update_enforcement_timer(next);
+		return next;
+	}
+
 #ifdef CONFIG_SMP
 	/* check if a global plugin pulled a task from a different RQ */
-	if (next && task_rq(next) != rq) {
+	if (task_rq(next) != rq) {
 		/* we need to migrate the task */
 		other_rq = task_rq(next);
 		from_where = other_rq->cpu;
@@ -168,7 +173,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 #endif
 
 	/* check if the task became invalid while we dropped the lock */
-	if (next && (!is_realtime(next) || !tsk_rt(next)->present)) {
+	if (!is_realtime(next) || !tsk_rt(next)->present) {
 		TRACE_TASK(next,
 			"BAD: next (no longer?) valid\n");
 		litmus->next_became_invalid(next);
@@ -176,15 +181,13 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 		next = NULL;
 	}
 
-	if (next) {
 #ifdef CONFIG_SMP
-		next->rt_param.stack_in_use = rq->cpu;
+	next->rt_param.stack_in_use = rq->cpu;
 #else
-		next->rt_param.stack_in_use = 0;
+	next->rt_param.stack_in_use = 0;
 #endif
-		update_rq_clock(rq);
-		next->se.exec_start = rq->clock;
-	}
+	update_rq_clock(rq);
+	next->se.exec_start = rq->clock;
 
 out:
 	update_enforcement_timer(next);

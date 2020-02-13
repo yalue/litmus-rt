@@ -422,9 +422,9 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	raw_spin_lock(&gsnedf_lock);
 
 	/* sanity checking */
-	BUG_ON(entry->scheduled && entry->scheduled != prev);
-	BUG_ON(entry->scheduled && !is_realtime(prev));
-	BUG_ON(is_realtime(prev) && !entry->scheduled);
+	BUG_ON(entry->scheduled && prev && (entry->scheduled != prev));
+	BUG_ON(entry->scheduled && prev && !is_realtime(prev));
+	BUG_ON(prev && is_realtime(prev) && !entry->scheduled);
 
 	/* (0) Determine state */
 	exists      = entry->scheduled != NULL;
@@ -439,15 +439,18 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	TRACE_TASK(prev, "invoked gsnedf_schedule.\n");
 #endif
 
-	if (exists)
+	if (exists) {
+		prev = entry->scheduled;
 		TRACE_TASK(prev,
 			   "blocks:%d out_of_time:%d np:%d sleep:%d preempt:%d "
 			   "state:%d sig:%d\n",
 			   blocks, out_of_time, np, sleep, preempt,
 			   prev->state, signal_pending(prev));
-	if (entry->linked && preempt)
+	}
+	if (entry->linked && preempt) {
 		TRACE_TASK(prev, "will be preempted by %s/%d\n",
 			   entry->linked->comm, entry->linked->pid);
+	}
 
 
 	/* If a task blocks we have no choice but to reschedule.
@@ -481,8 +484,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	/* The final scheduling decision. Do we need to switch for some reason?
 	 * If linked is different from scheduled, then select linked as next.
 	 */
-	if ((!np || blocks) &&
-	    entry->linked != entry->scheduled) {
+	if ((!np || blocks) && (entry->linked != entry->scheduled)) {
 		/* Schedule a linked job? */
 		if (entry->linked) {
 			entry->linked->rt_param.scheduled_on = entry->cpu;
@@ -494,12 +496,13 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 			entry->scheduled->rt_param.scheduled_on = NO_CPU;
 			TRACE_TASK(entry->scheduled, "scheduled_on = NO_CPU\n");
 		}
-	} else
+	} else {
 		/* Only override Linux scheduler if we have a real-time task
 		 * scheduled that needs to continue.
 		 */
 		if (exists)
 			next = prev;
+	}
 
 	sched_state_task_picked();
 
@@ -508,12 +511,12 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE("gsnedf_lock released, next=0x%p\n", next);
 
-	if (next)
+	if (next) {
 		TRACE_TASK(next, "scheduled at %llu\n", litmus_clock());
-	else if (exists && !next)
+	} else if (exists && !next) {
 		TRACE("becomes idle at %llu.\n", litmus_clock());
+	}
 #endif
-
 
 	return next;
 }
