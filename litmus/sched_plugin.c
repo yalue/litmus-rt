@@ -190,10 +190,14 @@ struct sched_plugin linux_sched_plugin = {
 	.deactivate_plugin = litmus_dummy_deactivate_plugin,
 	.get_domain_proc_info = litmus_dummy_get_domain_proc_info,
 	.synchronous_release_at = litmus_dummy_synchronous_release_at,
+	.should_wait_for_stack = litmus_dummy_should_wait_for_stack,
+	.next_became_invalid = litmus_dummy_next_became_invalid,
+	.task_cleanup = litmus_dummy_task_cleanup,
 #ifdef CONFIG_LITMUS_LOCKING
 	.allocate_lock = litmus_dummy_allocate_lock,
 #endif
-	.admit_task = litmus_dummy_admit_task
+	.admit_task = litmus_dummy_admit_task,
+	.fork_task = litmus_dummy_fork_task,
 };
 
 /*
