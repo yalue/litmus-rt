@@ -4,6 +4,9 @@
 /* Definitions related to non-preemptive sections signaled via the control
  * page
  */
+#if defined(CONFIG_NP_SECTION) || defined(CONFIG_SCHED_DEBUG_TRACE)
+#include <litmus/debug_trace.h>
+#endif
 
 #ifdef CONFIG_NP_SECTION
 

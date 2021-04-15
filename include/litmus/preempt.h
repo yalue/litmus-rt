@@ -6,7 +6,7 @@
 #include <linux/percpu.h>
 #include <asm/atomic.h>
 
-#include <litmus/debug_trace.h>
+#include <litmus/debug_trace_common.h>
 
 DECLARE_PER_CPU(bool, litmus_preemption_in_progress);
 
@@ -38,7 +38,9 @@ DECLARE_PER_CPU_SHARED_ALIGNED(atomic_t, resched_state);
 
 #ifdef CONFIG_PREEMPT_STATE_TRACE
 const char* sched_state_name(int s);
-#define TRACE_STATE(fmt, args...) TRACE("SCHED_STATE " fmt, args)
+#define TRACE_STATE(fmt, args...)					\
+	sched_trace_log_message(TRACE_PREFIX "SCHED_STATE " fmt,	\
+				TRACE_ARGS, ## args)
 #else
 #define TRACE_STATE(fmt, args...) /* ignore */
 #endif
