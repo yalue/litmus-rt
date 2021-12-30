@@ -749,7 +749,7 @@ static void pfair_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	unsigned long flags;
 	struct pfair_cluster* cluster;
 
-	TRACE("pfair: task new %d state:%d\n", t->pid, t->state);
+	TRACE("pfair: task new %d state:%d\n", t->pid, READ_ONCE(t->__state));
 
 	cluster = tsk_pfair(t)->cluster;
 
@@ -834,7 +834,7 @@ static void pfair_task_block(struct task_struct *t)
 {
 	BUG_ON(!is_realtime(t));
 	TRACE_TASK(t, "blocks at %llu, state:%d\n",
-		   litmus_clock(), t->state);
+		   litmus_clock(), READ_ONCE(t->__state));
 }
 
 static void pfair_task_exit(struct task_struct * t)
@@ -855,7 +855,7 @@ static void pfair_task_exit(struct task_struct * t)
 	 */
 	raw_spin_lock_irqsave(cluster_lock(cluster), flags);
 
-	TRACE_TASK(t, "RIP, state:%d\n", t->state);
+	TRACE_TASK(t, "RIP, state:%d\n", READ_ONCE(t->__state));
 	drop_all_references(t);
 
 	raw_spin_unlock_irqrestore(cluster_lock(cluster), flags);

@@ -42,6 +42,10 @@
 #include <linux/freezer.h>
 #include <linux/compat.h>
 
+#include <litmus/debug_trace.h>
+#include <litmus/trace.h>
+#include <litmus/litmus.h>
+
 #include <linux/uaccess.h>
 
 #include <trace/events/timer.h>
@@ -1245,6 +1249,10 @@ static int __hrtimer_start_range_ns(struct hrtimer *timer, ktime_t tim,
 
 	tim = hrtimer_update_lowres(timer, tim, mode);
 
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	timer->when_added = base->get_time();
+#endif
+
 	hrtimer_set_expires_range_ns(timer, tim, delta_ns);
 
 	/* Switch the timer base, if necessary: */
@@ -1720,6 +1728,10 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 	struct hrtimer_clock_base *base;
 	unsigned int active = cpu_base->active_bases & active_mask;
 
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+	ktime_t was_exp_nxt = cpu_base->expires_next;
+#endif
+
 	for_each_active_base(base, cpu_base, active) {
 		struct timerqueue_node *node;
 		ktime_t basenow;
@@ -1745,6 +1757,26 @@ static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
 			 */
 			if (basenow < hrtimer_get_softexpires_tv64(timer))
 				break;
+
+#ifdef CONFIG_REPORT_TIMER_LATENCY
+			if (cpu_base->hres_active && (basenow >=
+			     hrtimer_get_expires_tv64(timer) +
+			     ((s64) CONFIG_REPORT_TIMER_LATENCY_THRESHOLD))) {
+				printk_ratelimited(KERN_WARNING
+				    "WARNING: P%d timer latency:%lld now:%lld "
+				    "basenow:%lld exp:%lld soft-exp:%lld "
+				    "nxt:%lld added:%lld "
+				    "timer:%p fn:%p"
+				    "\n",
+				    smp_processor_id(),
+				    basenow - hrtimer_get_expires_tv64(timer),
+				    now, basenow,
+				    hrtimer_get_expires_tv64(timer),
+				    hrtimer_get_softexpires_tv64(timer),
+				    was_exp_nxt, timer->when_added, timer,
+				    timer->function);
+			}
+#endif
 
 			__run_hrtimer(cpu_base, base, timer, &basenow, flags);
 			if (active_mask == HRTIMER_ACTIVE_SOFT)
@@ -1852,9 +1884,14 @@ retry:
 	 */
 	cpu_base->nr_hangs++;
 	cpu_base->hang_detected = 1;
+
+	TRACE("hrtimer hang detected on P%d: #%u \n",
+		cpu_base->cpu, cpu_base->nr_hangs);
+
 	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
 
 	delta = ktime_sub(now, entry_time);
+ 	TRACE("hrtimer hang delta: %lld\n", delta);
 	if ((unsigned int)delta > cpu_base->max_hang_time)
 		cpu_base->max_hang_time = (unsigned int) delta;
 	/*
@@ -1865,6 +1902,9 @@ retry:
 		expires_next = ktime_add_ns(now, 100 * NSEC_PER_MSEC);
 	else
 		expires_next = ktime_add(now, delta);
+
+ 	TRACE("hrtimer expires_next: %llu\n", ktime_to_ns(expires_next));
+
 	tick_program_event(expires_next, 1);
 	pr_warn_once("hrtimer: interrupt took %llu ns\n", ktime_to_ns(delta));
 }
@@ -1935,8 +1975,20 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 	struct task_struct *task = t->task;
 
 	t->task = NULL;
-	if (task)
+	if (task) {
+#ifdef CONFIG_SCHED_OVERHEAD_TRACE
+		if (is_realtime(task)) {
+			ktime_t expires = hrtimer_get_expires(timer);
+			/* Fix up timers that were added past their due date;
+			 * that's not really release latency. */
+			lt_t intended_release = max(expires, timer->when_added);
+			TS_RELEASE_LATENCY(intended_release);
+		}
+#endif
+		TS_RELEASE_START;
 		wake_up_process(task);
+		TS_RELEASE_END;
+	}
 
 	return HRTIMER_NORESTART;
 }
@@ -2089,8 +2141,20 @@ long hrtimer_nanosleep(ktime_t rqtp, const enum hrtimer_mode mode,
 	u64 slack;
 
 	slack = current->timer_slack_ns;
-	if (dl_task(current) || rt_task(current))
+	if (dl_task(current) || rt_task(current) || is_realtime(current))
 		slack = 0;
+
+	if (is_realtime(current)
+		&& clockid == CLOCK_MONOTONIC
+		&& mode == HRTIMER_MODE_ABS) {
+		/* special handling: to handle periodic activations
+		 * correctly despite timer interrupt jitter and overheads,
+		 * the plugin might need to know the time at which the
+		 * task intends to wake up
+		 */
+		tsk_rt(current)->doing_abs_nanosleep = 1;
+		tsk_rt(current)->nanosleep_wakeup = ktime_to_ns(rqtp);
+	}
 
 	hrtimer_init_sleeper_on_stack(&t, clockid, mode);
 	hrtimer_set_expires_range_ns(&t.timer, rqtp, slack);
@@ -2110,6 +2174,9 @@ long hrtimer_nanosleep(ktime_t rqtp, const enum hrtimer_mode mode,
 	set_restart_fn(restart, hrtimer_nanosleep_restart);
 out:
 	destroy_hrtimer_on_stack(&t.timer);
+
+	tsk_rt(current)->doing_abs_nanosleep = 0;
+
 	return ret;
 }
 

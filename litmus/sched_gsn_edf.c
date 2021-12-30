@@ -444,7 +444,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 			   "blocks:%d out_of_time:%d np:%d sleep:%d preempt:%d "
 			   "state:%d sig:%d\n",
 			   blocks, out_of_time, np, sleep, preempt,
-			   prev->state, signal_pending(prev));
+			   READ_ONCE(prev->__state), signal_pending(prev));
 	if (entry->linked && preempt)
 		TRACE_TASK(prev, "will be preempted by %s/%d\n",
 			   entry->linked->comm, entry->linked->pid);

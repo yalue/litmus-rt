@@ -105,6 +105,9 @@
 
 #include <trace/events/sched.h>
 
+#include <litmus/litmus.h>
+#include <litmus/sched_plugin.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/task.h>
 
@@ -749,6 +752,9 @@ void __put_task_struct(struct task_struct *tsk)
 	cgroup_free(tsk);
 	task_numa_free(tsk, true);
 	security_task_free(tsk);
+
+	exit_litmus(tsk);
+
 	bpf_task_storage_free(tsk);
 	exit_creds(tsk);
 	delayacct_tsk_free(tsk);

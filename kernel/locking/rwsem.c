@@ -28,6 +28,8 @@
 #include <linux/rwsem.h>
 #include <linux/atomic.h>
 
+#include <litmus/litmus.h>
+
 #ifndef CONFIG_PREEMPT_RT
 #include "lock_events.h"
 
@@ -588,7 +590,7 @@ static inline bool rwsem_try_write_lock(struct rw_semaphore *sem,
 		new = count;
 
 		if (count & RWSEM_LOCK_MASK) {
-			if (has_handoff || (!rt_task(waiter->task) &&
+			if (has_handoff || (!(rt_task(waiter->task) || is_realtime(current)) &&
 					    !time_after(jiffies, waiter->timeout)))
 				return false;
 
@@ -883,7 +885,7 @@ static bool rwsem_optimistic_spin(struct rw_semaphore *sem)
 		if (owner_state != OWNER_WRITER) {
 			if (need_resched())
 				break;
-			if (rt_task(current) &&
+			if ((rt_task(current) || is_realtime(current)) &&
 			   (prev_owner_state != OWNER_WRITER))
 				break;
 		}

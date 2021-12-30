@@ -524,10 +524,10 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 
 		deactivate_domain_proc();
 
-		get_online_cpus();
+		cpus_read_lock();
 		atomic_set(&ready_to_switch, num_online_cpus());
-		err = stop_cpus(cpu_online_mask, do_plugin_switch, plugin);
-		put_online_cpus();
+		err = stop_machine_cpuslocked(do_plugin_switch, plugin, NULL);
+		cpus_read_unlock();
 
 		if (!litmus->get_domain_proc_info(&domain_info))
 			activate_domain_proc(domain_info);
@@ -712,7 +712,6 @@ void hrtimer_start_on(int cpu, struct hrtimer_start_on_info *info,
 	/* initialize call_single_data struct */
 	info->csd.func  = &hrtimer_pull;
 	info->csd.info  = info;
-	info->csd.flags = 0;
 
 	/* initiate pull  */
 	preempt_disable();

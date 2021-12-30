@@ -62,7 +62,7 @@ static void psnedf_domain_init(psnedf_domain_t* pedf,
 
 static void requeue(struct task_struct* t, rt_domain_t *edf)
 {
-	if (t->state != TASK_RUNNING)
+	if (READ_ONCE(t->__state) != TASK_RUNNING)
 		TRACE_TASK(t, "requeue: !TASK_RUNNING\n");
 
 	tsk_rt(t)->completed = 0;
@@ -334,7 +334,8 @@ static void psnedf_task_wake_up(struct task_struct *task)
 static void psnedf_task_block(struct task_struct *t)
 {
 	/* only running tasks can block, thus t is in no queue */
-	TRACE_TASK(t, "block at %llu, state=%d\n", litmus_clock(), t->state);
+	TRACE_TASK(t, "block at %llu, state=%d\n", litmus_clock(),
+		READ_ONCE(t->__state));
 
 	BUG_ON(!is_realtime(t));
 	BUG_ON(is_queued(t));

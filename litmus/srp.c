@@ -282,7 +282,7 @@ static void do_ceiling_block(struct task_struct *tsk)
 		.entry   = {NULL, NULL}
 	};
 
-	tsk->state = TASK_UNINTERRUPTIBLE;
+	WRITE_ONCE(tsk->__state, TASK_UNINTERRUPTIBLE);
 	add_wait_queue(&this_cpu_ptr(&srp)->ceiling_blocked, &wait);
 	tsk->rt_param.srp_non_recurse = 1;
 	preempt_enable_no_resched();

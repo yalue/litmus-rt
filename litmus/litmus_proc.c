@@ -46,11 +46,11 @@ static int litmus_stats_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, litmus_stats_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations litmus_stats_proc_fops = {
-	.open		= litmus_stats_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
+static const struct proc_ops litmus_stats_proc_ops = {
+	.proc_open	= litmus_stats_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
 };
 
 
@@ -65,13 +65,12 @@ static int litmus_loaded_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, litmus_loaded_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations litmus_loaded_proc_fops = {
-	.open		= litmus_loaded_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
+static const struct proc_ops litmus_loaded_proc_ops = {
+	.proc_open	= litmus_loaded_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
 };
-
 
 
 
@@ -119,12 +118,12 @@ static int litmus_active_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, litmus_active_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations litmus_active_proc_fops = {
-	.open		= litmus_active_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-	.write		= litmus_active_proc_write,
+static const struct proc_ops litmus_active_proc_ops = {
+	.proc_open	= litmus_active_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+	.proc_write	= litmus_active_proc_write,
 };
 
 
@@ -175,12 +174,12 @@ static int litmus_release_master_proc_open(struct inode *inode, struct file *fil
 	return single_open(file, litmus_release_master_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations litmus_release_master_proc_fops = {
-	.open		= litmus_release_master_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-	.write		= litmus_release_master_proc_write,
+static const struct proc_ops litmus_release_master_proc_ops = {
+	.proc_open	= litmus_release_master_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+	.proc_write	= litmus_release_master_proc_write,
 };
 #endif
 
@@ -193,7 +192,7 @@ int __init init_litmus_proc(void)
 	}
 
 	curr_file = proc_create("active_plugin", 0644, litmus_dir,
-				&litmus_active_proc_fops);
+				&litmus_active_proc_ops);
 
 	if (!curr_file) {
 		printk(KERN_ERR "Could not allocate active_plugin "
@@ -203,7 +202,7 @@ int __init init_litmus_proc(void)
 
 #ifdef CONFIG_RELEASE_MASTER
 	release_master_file = proc_create("release_master", 0644, litmus_dir,
-					  &litmus_release_master_proc_fops);
+					  &litmus_release_master_proc_ops);
 	if (!release_master_file) {
 		printk(KERN_ERR "Could not allocate release_master "
 		       "procfs entry.\n");
@@ -211,7 +210,7 @@ int __init init_litmus_proc(void)
 	}
 #endif
 
-	stat_file = proc_create("stats", 0444, litmus_dir, &litmus_stats_proc_fops);
+	stat_file = proc_create("stats", 0444, litmus_dir, &litmus_stats_proc_ops);
 
 	plugs_dir = proc_mkdir("plugins", litmus_dir);
 	if (!plugs_dir){
@@ -221,7 +220,7 @@ int __init init_litmus_proc(void)
 	}
 
 	plugs_file = proc_create("loaded", 0444, plugs_dir,
-				 &litmus_loaded_proc_fops);
+				 &litmus_loaded_proc_ops);
 
 	domains_dir = proc_mkdir("domains", litmus_dir);
 	if (!domains_dir) {
@@ -408,12 +407,12 @@ static int litmus_cluster_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, litmus_cluster_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations litmus_cluster_proc_fops = {
-	.open		= litmus_cluster_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-	.write		= litmus_cluster_proc_write,
+static const struct proc_ops litmus_cluster_proc_ops = {
+	.proc_open	= litmus_cluster_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+	.proc_write	= litmus_cluster_proc_write,
 };
 
 struct proc_dir_entry* create_cluster_file(struct proc_dir_entry* parent,
@@ -423,7 +422,7 @@ struct proc_dir_entry* create_cluster_file(struct proc_dir_entry* parent,
 
 
 	cluster_file = proc_create_data("cluster", 0644, parent,
-					&litmus_cluster_proc_fops,
+					&litmus_cluster_proc_ops,
 					(void *) level);
 	if (!cluster_file) {
 		printk(KERN_ERR
@@ -450,11 +449,11 @@ static int litmus_mapping_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, litmus_mapping_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations litmus_domain_proc_fops = {
-	.open		= litmus_mapping_proc_open,
-	.read		= seq_read,
-	.llseek 	= seq_lseek,
-	.release 	= single_release,
+static const struct proc_ops litmus_domain_proc_ops = {
+	.proc_open	= litmus_mapping_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek 	= seq_lseek,
+	.proc_release 	= single_release,
 };
 
 long activate_domain_proc(struct domain_proc_info* map)
@@ -476,14 +475,14 @@ long activate_domain_proc(struct domain_proc_info* map)
 		struct cd_mapping* m = &map->cpu_to_domains[i];
 		snprintf(name, sizeof(name), "%d", m->id);
 		m->proc_file = proc_create_data(name, 0444, cpus_dir,
-			&litmus_domain_proc_fops, (void*)m);
+			&litmus_domain_proc_ops, (void*)m);
 	}
 
 	for (i = 0; i < map->num_domains; ++i) {
 		struct cd_mapping* m = &map->domain_to_cpus[i];
 		snprintf(name, sizeof(name), "%d", m->id);
 		m->proc_file = proc_create_data(name, 0444, domains_dir,
-			&litmus_domain_proc_fops, (void*)m);
+			&litmus_domain_proc_ops, (void*)m);
 	}
 
 	return 0;

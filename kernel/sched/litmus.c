@@ -30,8 +30,8 @@ static void update_time_litmus(struct rq *rq, struct task_struct *p)
 	cpuacct_charge(p, delta);
 }
 
-static void double_rq_lock(struct rq *rq1, struct rq *rq2);
-static void double_rq_unlock(struct rq *rq1, struct rq *rq2);
+extern void double_rq_lock(struct rq *rq1, struct rq *rq2);
+extern void double_rq_unlock(struct rq *rq1, struct rq *rq2);
 
 static struct task_struct *
 litmus_schedule(struct rq *rq, struct task_struct *prev)
@@ -75,7 +75,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			_maybe_deadlock = litmus_clock();
 		}
 
-		raw_spin_unlock(&rq->lock);
+		raw_spin_rq_unlock(rq);
 
 		while (next->rt_param.stack_in_use != NO_CPU) {
 			cpu_relax();
@@ -92,7 +92,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				 * reconsider. */
 				litmus_reschedule_local();
 				/* give up */
-				raw_spin_lock(&rq->lock);
+				raw_spin_rq_lock(rq);
 				goto out;
 			}
 
@@ -106,7 +106,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				                 task_rq(next)->cpu);
 
 				/* bail out */
-				raw_spin_lock(&rq->lock);
+				raw_spin_rq_lock(rq);
 				litmus->next_became_invalid(next);
 				litmus_reschedule_local();
 				next = NULL;
@@ -129,7 +129,7 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 				next = NULL;
 
 				/* bail out */
-				raw_spin_lock(&rq->lock);
+				raw_spin_rq_lock(rq);
 				goto out;
 #endif
 			}
@@ -148,12 +148,12 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 			/* ok, we can grab it */
 			set_task_cpu(next, rq->cpu);
 			/* release the other CPU's runqueue, but keep ours */
-			raw_spin_unlock(&other_rq->lock);
+			raw_spin_rq_unlock(other_rq);
 		} else {
 			/* Either it moved or the stack was claimed; both is
 			 * bad and forces us to abort the migration. */
 			TRACE_TASK(next, "next invalid: no longer available\n");
-			raw_spin_unlock(&other_rq->lock);
+			raw_spin_rq_unlock(other_rq);
 			litmus->next_became_invalid(next);
 			next = NULL;
 			goto out;
@@ -206,7 +206,7 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		 * WARNING: this needs to be re-evaluated when porting
 		 *          to newer kernel versions.
 		 */
-		p->state = TASK_RUNNING;
+		WRITE_ONCE(current->__state, TASK_RUNNING);
 		litmus->task_wake_up(p);
 
 		rq->litmus.nr_running++;
@@ -264,8 +264,7 @@ static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
  * prev and rf are deprecated by our caller and unused
  * returns the next task to be scheduled
  */
-static struct task_struct *pick_next_task_litmus(struct rq *rq,
-	struct task_struct *prev, struct rq_flags *rf)
+static struct task_struct *pick_next_task_litmus(struct rq *rq)
 {
 	struct task_struct *next;
 
@@ -332,7 +331,7 @@ balance_litmus(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
  * exec, fork, wakeup.
  */
 static int
-select_task_rq_litmus(struct task_struct *p, int cpu, int sd_flag, int flags)
+select_task_rq_litmus(struct task_struct *p, int cpu, int flags)
 {
 	/* preemption is already disabled.
 	 * We don't want to change cpu here
@@ -352,16 +351,6 @@ static void update_curr_litmus(struct rq *rq)
 }
 
 const struct sched_class litmus_sched_class = {
-	/* From 34f971f6 the stop/migrate worker threads have a class on
-	 * their own, which is the highest prio class. We don't support
-	 * cpu-hotplug or cpu throttling. Allows Litmus to use up to 1.0
-	 * CPU capacity.
-	 */
-#ifdef CONFIG_SMP
-	.next			= &stop_sched_class,
-#else
-	.next			= &dl_sched_class,
-#endif
 	.enqueue_task		= enqueue_task_litmus,
 	.dequeue_task		= dequeue_task_litmus,
 	.yield_task		= yield_task_litmus,

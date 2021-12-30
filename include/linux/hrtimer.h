@@ -124,6 +124,9 @@ struct hrtimer {
 	u8				is_rel;
 	u8				is_soft;
 	u8				is_hard;
+#if defined(CONFIG_REPORT_TIMER_LATENCY) || defined(CONFIG_SCHED_OVERHEAD_TRACE)
+	ktime_t				when_added;
+#endif
 };
 
 /**

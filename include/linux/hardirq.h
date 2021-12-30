@@ -10,6 +10,8 @@
 #include <linux/vtime.h>
 #include <asm/hardirq.h>
 
+#include <litmus/trace_irq.h>
+
 extern void synchronize_irq(unsigned int irq);
 extern bool synchronize_hardirq(unsigned int irq);
 
@@ -36,6 +38,7 @@ static __always_inline void rcu_irq_enter_check_tick(void)
 		preempt_count_add(HARDIRQ_OFFSET);	\
 		lockdep_hardirq_enter();		\
 		account_hardirq_enter(current);		\
+		ft_irq_fired();				\
 	} while (0)
 
 /*
@@ -128,6 +131,7 @@ extern void rcu_nmi_exit(void);
 		instrumentation_begin();			\
 		ftrace_nmi_enter();				\
 		instrumentation_end();				\
+		ft_irq_fired();					\
 	} while (0)
 
 #define __nmi_exit()						\

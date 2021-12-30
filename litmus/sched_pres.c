@@ -228,7 +228,7 @@ static void pres_task_block(struct task_struct *tsk)
 	struct pres_cpu_state *state = cpu_state_for(tinfo->cpu);
 
 	TRACE_TASK(tsk, "thread suspends at %llu (state:%d, running:%d)\n",
-		litmus_clock(), tsk->state, is_current_running());
+		litmus_clock(), READ_ONCE(tsk->__state), is_current_running());
 
 	raw_spin_lock_irqsave(&state->lock, flags);
 	sup_update_time(&state->sup_env, litmus_clock());

@@ -2064,3 +2064,11 @@ source "arch/arm64/kvm/Kconfig"
 if CRYPTO
 source "arch/arm64/crypto/Kconfig"
 endif
+
+source "arch/arm/Kconfig.assembler"
+
+config ARCH_HAS_FEATHER_TRACE
+	def_bool n
+
+source "litmus/Kconfig"
+

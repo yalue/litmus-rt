@@ -66,6 +66,8 @@
 #include <linux/io_uring.h>
 #include <linux/syscall_user_dispatch.h>
 
+#include <litmus/litmus.h>
+
 #include <linux/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
@@ -1811,6 +1813,7 @@ static int bprm_execve(struct linux_binprm *bprm,
 		goto out_unmark;
 
 	sched_exec();
+	litmus_exec();
 
 	bprm->file = file;
 	/*

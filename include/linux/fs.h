@@ -726,6 +726,9 @@ struct inode {
 	struct fsverity_info	*i_verity_info;
 #endif
 
+	struct list_head i_obj_list;
+	struct mutex i_obj_mutex;
+
 	void			*i_private; /* fs or device private pointer */
 } __randomize_layout;
 

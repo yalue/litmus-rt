@@ -194,7 +194,7 @@ static struct task_struct* pfp_schedule(struct task_struct * prev)
 	if (exists)
 		TRACE_TASK(pfp->scheduled, "state:%d blocks:%d oot:%d np:%d sleep:%d "
 			"mig:%d preempt:%d resched:%d on_rq:%d on_cpu:%d\n",
-			pfp->scheduled->state,
+			READ_ONCE(pfp->scheduled->__state),
 			blocks, out_of_time, np, sleep, migrate, preempt, resched,
 			pfp->scheduled->on_rq, pfp->scheduled->on_cpu);
 
@@ -261,10 +261,9 @@ static void pfp_finish_switch(struct task_struct *prev)
 
 	if (is_realtime(prev))
 		TRACE_TASK(prev, "state:%d on_rq:%d on_cpu:%d\n",
-			prev->state, prev->on_rq, prev->on_cpu);
+			READ_ONCE(prev->__state), prev->on_rq, prev->on_cpu);
 
-	if (is_realtime(prev) &&
-	    prev->state == TASK_RUNNING &&
+	if (is_realtime(prev) && (READ_ONCE(prev->__state) == TASK_RUNNING) &&
 	    get_partition(prev) != smp_processor_id()) {
 		TRACE_TASK(prev, "needs to migrate from P%d to P%d\n",
 			   smp_processor_id(), get_partition(prev));
@@ -365,7 +364,8 @@ out_unlock:
 static void pfp_task_block(struct task_struct *t)
 {
 	/* only running tasks can block, thus t is in no queue */
-	TRACE_TASK(t, "block at %llu, state=%d\n", litmus_clock(), t->state);
+	TRACE_TASK(t, "block at %llu, state=%d\n", litmus_clock(),
+		READ_ONCE(t->__state));
 
 	BUG_ON(!is_realtime(t));
 

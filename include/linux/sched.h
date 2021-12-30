@@ -36,6 +36,9 @@
 #include <linux/kcsan.h>
 #include <asm/kmap_size.h>
 
+#include <litmus/rt_param.h>
+#include <litmus/preempt.h>
+
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
 struct backing_dev_info;
@@ -1319,6 +1322,12 @@ struct task_struct {
 	/* Start of a write-and-pause period: */
 	unsigned long			dirty_paused_when;
 
+	/* LITMUS RT parameters and state */
+	struct rt_param			rt_param;
+
+	/* references to PI semaphores, etc. */
+	struct od_table_entry		*od_table;
+
 #ifdef CONFIG_LATENCYTOP
 	int				latency_record_count;
 	struct latency_record		latency_record[LT_SAVECOUNT];
@@ -1939,6 +1948,9 @@ static __always_inline void scheduler_ipi(void)
 	 * this IPI.
 	 */
 	preempt_fold_need_resched();
+
+	/* Let LITMUS^RT preemption state machine know about this IPI. */
+	sched_state_ipi();
 }
 extern unsigned long wait_task_inactive(struct task_struct *, unsigned int match_state);
 #else
@@ -1987,6 +1999,7 @@ static inline int test_tsk_thread_flag(struct task_struct *tsk, int flag)
 static inline void set_tsk_need_resched(struct task_struct *tsk)
 {
 	set_tsk_thread_flag(tsk,TIF_NEED_RESCHED);
+	sched_state_will_schedule(tsk);
 }
 
 static inline void clear_tsk_need_resched(struct task_struct *tsk)

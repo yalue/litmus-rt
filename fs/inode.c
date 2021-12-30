@@ -399,6 +399,8 @@ void inode_init_once(struct inode *inode)
 	INIT_LIST_HEAD(&inode->i_lru);
 	__address_space_init_once(&inode->i_data);
 	i_size_ordered_init(inode);
+	INIT_LIST_HEAD(&inode->i_obj_list);
+	mutex_init(&inode->i_obj_mutex);
 }
 EXPORT_SYMBOL(inode_init_once);
 

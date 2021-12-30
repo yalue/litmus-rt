@@ -69,6 +69,10 @@
 #include <asm/unistd.h>
 #include <asm/mmu_context.h>
 
+#include <litmus/litmus.h>
+
+extern void exit_od_table(struct task_struct *t);
+
 static void __unhash_process(struct task_struct *p, bool group_dead)
 {
 	nr_threads--;
@@ -749,6 +753,16 @@ void __noreturn do_exit(long code)
 	if (unlikely(!tsk->pid))
 		panic("Attempted to kill the idle task!");
 
+
+	if (unlikely(is_realtime(tsk))) {
+		/* We would like the task to be polite
+		 * and transition out of RT mode first.
+		 * Let's give it a little help.
+		 */
+		litmus_do_exit(tsk);
+		BUG_ON(is_realtime(tsk));
+	}
+
 	/*
 	 * If do_exit is called because this processes oopsed, it's possible
 	 * that get_fs() was left as KERNEL_DS, so reset it to USER_DS before
@@ -812,6 +826,8 @@ void __noreturn do_exit(long code)
 	if (group_dead)
 		tty_audit_exit();
 	audit_free(tsk);
+
+	exit_od_table(tsk);
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);
