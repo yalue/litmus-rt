@@ -108,6 +108,7 @@ long complete_job(void)
 	 * it also takes care of preparing for the next release
 	 */
 	litmus_reschedule_local();
+	TRACE_CUR("after reschedule_local\n");
 	preempt_enable();
 	return 0;
 }

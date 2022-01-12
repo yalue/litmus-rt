@@ -3989,8 +3989,9 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	unsigned long flags;
 	int cpu, success = 0;
 
-	if (is_realtime(p))
+	if (is_realtime(p)) {
 		TRACE_TASK(p, "try_to_wake_up() state:%d\n", p->__state);
+	}
 
 	preempt_disable();
 	if (p == current) {
@@ -4151,9 +4152,10 @@ out:
 	if (success)
 		ttwu_stat(p, task_cpu(p), wake_flags);
 
-	if (is_realtime(p))
+	if (is_realtime(p)) {
 		TRACE_TASK(p, "try_to_wake_up() done state:%d success:%d\n",
 			p->__state, success);
+	}
 
 	preempt_enable();
 

@@ -113,8 +113,8 @@ static inline int sched_state_transition(sched_state_t from, sched_state_t to)
 	if (old_state == from) {
 		TRACE_SCHED_STATE_CHANGE(from, to, smp_processor_id());
 		return 1;
-	} else
-		return 0;
+	}
+	return 0;
 }
 
 static inline int sched_state_transition_on(int cpu,

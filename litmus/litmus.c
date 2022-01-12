@@ -32,6 +32,8 @@
 #include <trace/events/litmus.h>
 #endif
 
+extern int stop_cpus(const struct cpumask *cpumask, cpu_stop_fn_t fn, void *arg);
+
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 
@@ -105,16 +107,20 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 
 	if (pid < 0 || param == 0) {
 		goto out;
+		TRACE("set_rt_task_param 1\n");
 	}
 	if (copy_from_user(&tp, param, sizeof(tp))) {
 		retval = -EFAULT;
+		TRACE("set_rt_task_param 2\n");
 		goto out;
 	}
+	TRACE("set_rt_task_param 3\n");
 
 	/* Task search and manipulation must be protected */
 	read_lock_irq(&tasklist_lock);
 	rcu_read_lock();
 	if (!(target = find_task_by_vpid(pid))) {
+		TRACE("set_Rt_task_param 4\n");
 		retval = -ESRCH;
 		rcu_read_unlock();
 		goto out_unlock;
@@ -129,9 +135,10 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		goto out_unlock;
 	if (tp.period <= 0)
 		goto out_unlock;
+	TRACE("set_rt_task_param 5\n");
 	if (min(tp.relative_deadline, tp.period) < tp.exec_cost) /*density check*/
 	{
-		printk(KERN_INFO "litmus: real-time task %d rejected "
+		TRACE(KERN_INFO "litmus: real-time task %d rejected "
 		       "because task density > 1.0\n", pid);
 		goto out_unlock;
 	}
@@ -139,7 +146,7 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 	    tp.cls != RT_CLASS_SOFT &&
 	    tp.cls != RT_CLASS_BEST_EFFORT)
 	{
-		printk(KERN_INFO "litmus: real-time task %d rejected "
+		TRACE(KERN_INFO "litmus: real-time task %d rejected "
 				 "because its class is invalid\n", pid);
 		goto out_unlock;
 	}
@@ -147,12 +154,13 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 	    tp.budget_policy != QUANTUM_ENFORCEMENT &&
 	    tp.budget_policy != PRECISE_ENFORCEMENT)
 	{
-		printk(KERN_INFO "litmus: real-time task %d rejected "
+		TRACE(KERN_INFO "litmus: real-time task %d rejected "
 		       "because unsupported budget enforcement policy "
 		       "specified (%d)\n",
 		       pid, tp.budget_policy);
 		goto out_unlock;
 	}
+	TRACE("set_rt_task_param 6\n");
 
 	if (is_realtime(target)) {
 		/* The task is already a real-time task.
@@ -164,8 +172,10 @@ asmlinkage long sys_set_rt_task_param(pid_t pid, struct rt_task __user * param)
 		target->rt_param.task_params = tp;
 		retval = 0;
 	}
+	TRACE("set_rt_task_param 7\n");
       out_unlock:
 	read_unlock_irq(&tasklist_lock);
+	TRACE("set_rt_Task_param 8\n");
       out:
 	return retval;
 }
@@ -223,6 +233,7 @@ asmlinkage long sys_complete_job(void)
 		retval = -EINVAL;
 		goto out;
 	}
+	TRACE("LITMUS: sys_complete_job 1\n");
 	/* Task with negative or zero period cannot sleep */
 	if (get_rt_period(current) <= 0) {
 		retval = -EINVAL;
@@ -396,6 +407,7 @@ long litmus_admit_task(struct task_struct* tsk)
 
 	tsk_rt(tsk)->heap_node = NULL;
 	tsk_rt(tsk)->rel_heap = NULL;
+	TRACE("litmus_admit_task 1\n");
 
 	if (get_rt_relative_deadline(tsk) == 0 ||
 	    get_exec_cost(tsk) >
@@ -410,6 +422,7 @@ long litmus_admit_task(struct task_struct* tsk)
 	}
 
 	retval = __litmus_admit_task(tsk);
+	TRACE("litmus_admit_task 2\n");
 
 out:
 	if (retval) {
@@ -418,6 +431,7 @@ out:
 		if (tsk_rt(tsk)->rel_heap)
 			release_heap_free(tsk_rt(tsk)->rel_heap);
 	}
+	TRACE("litmus_admit_task 3\n");
 	return retval;
 }
 
@@ -524,10 +538,13 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 
 		deactivate_domain_proc();
 
+		TRACE("In switch_sched_plugin 1.\n");
 		cpus_read_lock();
 		atomic_set(&ready_to_switch, num_online_cpus());
-		err = stop_machine_cpuslocked(do_plugin_switch, plugin, NULL);
+		//err = stop_machine_cpuslocked(do_plugin_switch, plugin, NULL);
+		err = stop_cpus(cpu_online_mask, do_plugin_switch, plugin);
 		cpus_read_unlock();
+		TRACE("In switch_sched_plugin 2.\n");
 
 		if (!litmus->get_domain_proc_info(&domain_info))
 			activate_domain_proc(domain_info);

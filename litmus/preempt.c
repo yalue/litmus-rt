@@ -30,10 +30,11 @@ void sched_state_will_schedule(struct task_struct* tsk)
 			set_sched_state(PICKED_WRONG_TASK);
 		else
 			set_sched_state(WILL_SCHEDULE);
-	} else
+	} else {
 		/* Litmus tasks should never be subject to a remote
 		 * set_tsk_need_resched(). */
 		BUG_ON(is_realtime(tsk));
+	}
 #ifdef CONFIG_PREEMPT_STATE_TRACE
 	TRACE_TASK(tsk, "set_tsk_need_resched() ret:%p\n",
 		   __builtin_return_address(0));
@@ -105,13 +106,18 @@ void litmus_reschedule(int cpu)
 
 void litmus_reschedule_local(void)
 {
-	if (is_in_sched_state(TASK_PICKED))
+	if (is_in_sched_state(TASK_PICKED)) {
+		TRACE("litmus_reschedule_local 1\n");
 		set_sched_state(PICKED_WRONG_TASK);
-	else if (is_in_sched_state(TASK_SCHEDULED
+		TRACE("litmus_reschedule_local 2\n");
+	} else if (is_in_sched_state(TASK_SCHEDULED
 	                           | SHOULD_SCHEDULE
 	                           | PICKED_WRONG_TASK)) {
+		TRACE("litmus_reschedule_local 3\n");
 		set_sched_state(WILL_SCHEDULE);
+		TRACE("litmus_reschedule_local 4\n");
 		set_tsk_need_resched(current);
+		TRACE("litmus_reschedule_local 5\n");
 		preempt_set_need_resched();
 	}
 }
