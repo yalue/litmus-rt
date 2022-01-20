@@ -124,9 +124,11 @@
  * used to determine the order of the priority of each sched class in
  * relation to each other.
  *
- * FIXME: Technically, __stop_sched_class ought to be the last sched class, but
- * some older LITMUS^RT plugins assume that LITMUS is the top sched class.
- * Readjust this if possible.  Are those plugins still relevant?
+ * Technically, __stop_sched_class ought to be the last sched class, but
+ * some older LITMUS^RT plugins may assume that LITMUS is the top sched class.
+ * At this point, I will just declare that any plugins doing so are irrelevant
+ * and would likely need to be updated anyway. In other words,
+ * __stop_sched_class is now the highest again.
  */
 #define SCHED_DATA				\
 	STRUCT_ALIGN();				\
@@ -135,8 +137,8 @@
 	*(__fair_sched_class)			\
 	*(__rt_sched_class)			\
 	*(__dl_sched_class)			\
-	*(__stop_sched_class)			\
 	*(__litmus_sched_class)			\
+	*(__stop_sched_class)			\
 	__end_sched_classes = .;
 
 /* The actual configuration determine if the init/exit sections
