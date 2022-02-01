@@ -92,7 +92,7 @@
  * If KASLR is disabled we can shrink it to 0.5 GiB and increase the size
  * of the modules area to 1.5 GiB.
  */
-#if 1
+#ifdef CONFIG_RANDOMIZE_BASE
 #define KERNEL_IMAGE_SIZE	(1024 * 1024 * 1024)
 #else
 #define KERNEL_IMAGE_SIZE	(512 * 1024 * 1024)

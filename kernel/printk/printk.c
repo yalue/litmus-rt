@@ -2083,9 +2083,8 @@ static u16 printk_sprint(char *text, u16 size, int facility,
 	text_len = vscnprintf(text, size, fmt, args);
 
 	/* if LITMUS^RT tracer is active divert printk() msgs */
-	if (trace_override && !trace_recurse) {
+	if (trace_override && !trace_recurse)
 		TRACE("%s", text);
-	}
 
 	/* Mark and strip a trailing newline. */
 	if (text_len && text[text_len - 1] == '\n') {

@@ -44,16 +44,9 @@ litmus_schedule(struct rq *rq, struct task_struct *prev)
 	int from_where;
 	lt_t _maybe_deadlock = 0;
 #endif
-	TRACE("Called litmus_schedule!\n");
 
 	/* let the plugin schedule */
 	next = litmus->schedule(prev);
-
-	if (next) {
-		TRACE("litmus->schedule(prev) returned %p\n", next);
-	} else {
-		TRACE("litmus->schedule(prev) returned NULL\n");
-	}
 
 	sched_state_plugin_check();
 
@@ -202,7 +195,6 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 				int flags)
 {
 	tsk_rt(p)->present = 1;
-	TRACE("In enqueue_task_litmus 1\n");
 	if (flags & ENQUEUE_WAKEUP) {
 		sched_trace_task_resume(p);
 		/* LITMUS^RT plugins need to update the state
@@ -215,9 +207,7 @@ static void enqueue_task_litmus(struct rq *rq, struct task_struct *p,
 		 *          to newer kernel versions.
 		 */
 		WRITE_ONCE(current->__state, TASK_RUNNING);
-		TRACE("enqueue_task_litmus 2\n");
 		litmus->task_wake_up(p);
-		TRACE("enqueue_task_litmus 3\n");
 
 		rq->litmus.nr_running++;
 	} else {
@@ -271,6 +261,7 @@ static void put_prev_task_litmus(struct rq *rq, struct task_struct *p)
 
 /* pick_next_task_litmus() - litmus_schedule() function
  *
+ * prev and rf are deprecated by our caller and unused
  * returns the next task to be scheduled
  */
 static struct task_struct *pick_next_task_litmus(struct rq *rq)
@@ -289,11 +280,6 @@ static struct task_struct *pick_next_task_litmus(struct rq *rq)
 	TS_PLUGIN_SCHED_END;
 
 	return next;
-}
-
-static struct task_struct *pick_task_litmus(struct rq *rq)
-{
-	return pick_next_task_litmus(rq);
 }
 
 static void task_tick_litmus(struct rq *rq, struct task_struct *p, int queued)
@@ -376,7 +362,6 @@ const struct sched_class litmus_sched_class = {
 
 #ifdef CONFIG_SMP
 	.balance		= balance_litmus,
-	.pick_task		= pick_task_litmus,
 	.select_task_rq		= select_task_rq_litmus,
 #endif
 

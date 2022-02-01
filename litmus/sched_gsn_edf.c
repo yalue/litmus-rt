@@ -257,11 +257,9 @@ static noinline void requeue(struct task_struct* task)
 	/* sanity check before insertion */
 	BUG_ON(is_queued(task));
 
-	if (is_early_releasing(task) || is_released(task, litmus_clock())) {
-		TRACE("GSN-EDF: __add_ready being called.\n");
+	if (is_early_releasing(task) || is_released(task, litmus_clock()))
 		__add_ready(&gsnedf, task);
-	} else {
-		TRACE("GSN-EDF: add_release being called.\n");
+	else {
 		/* it has got to wait */
 		add_release(&gsnedf, task);
 	}
@@ -305,12 +303,9 @@ static void check_for_preemptions(void)
 #endif
 		) {
 		task = __take_ready(&gsnedf);
-		TRACE("GSN-EDF: after __take_ready.\n");
 		TRACE_TASK(task, "linking to local CPU %d to avoid IPI\n", local->cpu);
 		link_task_to_cpu(task, local);
-		TRACE("GSN-EDF: after link_task_to_cpu.\n");
 		preempt(local);
-		TRACE("GSN-EDF: after preempt()\n");
 	}
 #endif
 
@@ -321,8 +316,6 @@ static void check_for_preemptions(void)
 		task = __take_ready(&gsnedf);
 		TRACE("check_for_preemptions: attempting to link task %d to %d\n",
 		      task->pid, last->cpu);
-
-		TRACE("GSN-EDF: attempting to link task %d to %d\n", task->pid, last->cpu);
 
 #ifdef CONFIG_SCHED_CPU_AFFINITY
 		{
@@ -340,7 +333,6 @@ static void check_for_preemptions(void)
 #endif
 
 		link_task_to_cpu(task, last);
-		TRACE("GSN-EDF: Attempting to preempt last.\n");
 		preempt(last);
 	}
 }
@@ -350,11 +342,8 @@ static noinline void gsnedf_job_arrival(struct task_struct* task)
 {
 	BUG_ON(!task);
 
-	TRACE("GSN-EDF: job arrived.\n");
 	requeue(task);
-	TRACE("GSN-EDF: after requeue()\n");
 	check_for_preemptions();
-	TRACE("GSN-EDF: after preemptions check\n");
 }
 
 static void gsnedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
@@ -363,11 +352,8 @@ static void gsnedf_release_jobs(rt_domain_t* rt, struct bheap* tasks)
 
 	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 
-	TRACE("GSN-EDF: in release_jobs.\n");
 	__merge_ready(rt, tasks);
-	TRACE("GSN-EDF: release_jobs, after merge_ready\n");
 	check_for_preemptions();
-	TRACE("GSN-EDF: release_jobs, after check_for_preemptions\n");
 
 	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
@@ -381,7 +367,6 @@ static noinline void curr_job_completion(int forced)
 	sched_trace_task_completion(t, forced);
 
 	TRACE_TASK(t, "job_completion(forced=%d).\n", forced);
-	TRACE("GSN-EDF: in curr_job_completion, forced=%d\n", forced);
 
 	/* set flags */
 	tsk_rt(t)->completed = 0;
@@ -424,7 +409,6 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	int out_of_time, sleep, preempt, np, exists, blocks;
 	struct task_struct* next = NULL;
 
-	TRACE("GSN-EDF: in schedule()\n");
 #ifdef CONFIG_RELEASE_MASTER
 	/* Bail out early if we are the release master.
 	 * The release master never schedules any real-time tasks.
@@ -454,7 +438,6 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE_TASK(prev, "invoked gsnedf_schedule.\n");
 #endif
-	TRACE("GSN-EDF: in schedule 2\n");
 
 	if (exists)
 		TRACE_TASK(prev,
@@ -472,38 +455,29 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	if (blocks)
 		unlink(entry->scheduled);
 
-	TRACE("GSN-EDF: in schedule 3\n");
-
 	/* Request a sys_exit_np() call if we would like to preempt but cannot.
 	 * We need to make sure to update the link structure anyway in case
 	 * that we are still linked. Multiple calls to request_exit_np() don't
 	 * hurt.
 	 */
 	if (np && (out_of_time || preempt || sleep)) {
-		TRACE("GSN-EDF: in schedule 3.1\n");
 		unlink(entry->scheduled);
 		request_exit_np(entry->scheduled);
 	}
-	TRACE("GSN-EDF: in schedule 4.\n");
 
 	/* Any task that is preemptable and either exhausts its execution
 	 * budget or wants to sleep completes. We may have to reschedule after
 	 * this. Don't do a job completion if we block (can't have timers running
 	 * for blocked jobs).
 	 */
-	if (!np && (out_of_time || sleep)) {
-		TRACE("GSN-EDF: in schedule 4.1\n");
+	if (!np && (out_of_time || sleep))
 		curr_job_completion(!sleep);
-	}
 
 	/* Link pending task if we became unlinked.
 	 */
-	if (!entry->linked) {
-		TRACE("GSN-EDF: in schedule 4.2\n");
+	if (!entry->linked)
 		link_task_to_cpu(__take_ready(&gsnedf), entry);
-	}
 
-	TRACE("GSN-EDF: in schedule 5.\n");
 	/* The final scheduling decision. Do we need to switch for some reason?
 	 * If linked is different from scheduled, then select linked as next.
 	 */
@@ -511,33 +485,26 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 	    entry->linked != entry->scheduled) {
 		/* Schedule a linked job? */
 		if (entry->linked) {
-			TRACE("GSN-EDF: in schedule 5.1\n");
 			entry->linked->rt_param.scheduled_on = entry->cpu;
 			next = entry->linked;
 			TRACE_TASK(next, "scheduled_on = P%d\n", smp_processor_id());
 		}
 		if (entry->scheduled) {
 			/* not gonna be scheduled soon */
-			TRACE("GSN-EDF: in schedule 5.2\n");
 			entry->scheduled->rt_param.scheduled_on = NO_CPU;
 			TRACE_TASK(entry->scheduled, "scheduled_on = NO_CPU\n");
 		}
-	} else {
-		TRACE("GSN-EDF: in schedule 5.3\n");
+	} else
 		/* Only override Linux scheduler if we have a real-time task
 		 * scheduled that needs to continue.
 		 */
 		if (exists)
 			next = prev;
-	}
 
-	TRACE("GSN-EDF: in schedule 6.\n");
 	sched_state_task_picked();
-	TRACE("GSN-EDF: in schedule 7.\n");
 
 	raw_spin_unlock(&gsnedf_lock);
 
-	TRACE("GSN-EDF: in schedule 8.\n");
 #ifdef WANT_ALL_SCHED_EVENTS
 	TRACE("gsnedf_lock released, next=0x%p\n", next);
 
@@ -547,7 +514,7 @@ static struct task_struct* gsnedf_schedule(struct task_struct * prev)
 		TRACE("becomes idle at %llu.\n", litmus_clock());
 #endif
 
-	TRACE("GSN-EDF: in schedule 9.\n");
+
 	return next;
 }
 
@@ -577,9 +544,7 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 
 	/* setup job params */
-	TRACE("GSN-EDF: task_new 1.\n");
 	release_at(t, litmus_clock());
-	TRACE("GSN-EDF: task_new 2.\n");
 
 	if (is_scheduled) {
 		entry = &per_cpu(gsnedf_cpu_entries, task_cpu(t));
@@ -588,32 +553,23 @@ static void gsnedf_task_new(struct task_struct * t, int on_rq, int is_scheduled)
 #ifdef CONFIG_RELEASE_MASTER
 		if (entry->cpu != gsnedf.release_master) {
 #endif
-			TRACE("GSN-EDF: task_new 3.\n");
 			entry->scheduled = t;
 			tsk_rt(t)->scheduled_on = task_cpu(t);
-			TRACE("GSN-EDF: task_new 4.\n");
 #ifdef CONFIG_RELEASE_MASTER
 		} else {
-			TRACE("GSN-EDF: task_new 5.\n");
 			/* do not schedule on release master */
 			preempt(entry); /* force resched */
 			tsk_rt(t)->scheduled_on = NO_CPU;
-			TRACE("GSN-EDF: task_new 6.\n");
 		}
 #endif
 	} else {
 		t->rt_param.scheduled_on = NO_CPU;
-		TRACE("GSN-EDF: task_new 7\n");
 	}
 	t->rt_param.linked_on          = NO_CPU;
 
-	if (on_rq || is_scheduled) {
-		TRACE("GSN-EDF: task_new 8\n");
+	if (on_rq || is_scheduled)
 		gsnedf_job_arrival(t);
-		TRACE("GSN-EDF: task_new 9\n");
-	}
 	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
-	TRACE("GSN-EDF: task_new 10\n");
 }
 
 static void gsnedf_task_wake_up(struct task_struct *task)
@@ -622,17 +578,13 @@ static void gsnedf_task_wake_up(struct task_struct *task)
 	lt_t now;
 
 	TRACE_TASK(task, "wake_up at %llu\n", litmus_clock());
-	TRACE("GSN-EDF: wake_up 1\n");
 
 	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	now = litmus_clock();
 	if (is_sporadic(task) && is_tardy(task, now)) {
-		TRACE("GSN-EDF: wake_up 1.1\n");
 		inferred_sporadic_job_release_at(task, now);
 	}
-	TRACE("GSN-EDF: wake_up 2.\n");
 	gsnedf_job_arrival(task);
-	TRACE("GSN-EDF: wake_up 3.\n");
 	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 }
 
@@ -641,14 +593,12 @@ static void gsnedf_task_block(struct task_struct *t)
 	unsigned long flags;
 
 	TRACE_TASK(t, "block at %llu\n", litmus_clock());
-	TRACE("GSN-EDF: task_block 1\n");
 
 	/* unlink if necessary */
 	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	unlink(t);
 	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 
-	TRACE("GSN-EDF: task_block 2.\n");
 	BUG_ON(!is_realtime(t));
 }
 
@@ -658,7 +608,6 @@ static void gsnedf_task_exit(struct task_struct * t)
 	unsigned long flags;
 
 	/* unlink if necessary */
-	TRACE("GSN-EDF: task_exit 1.\n");
 	raw_spin_lock_irqsave(&gsnedf_lock, flags);
 	unlink(t);
 	if (tsk_rt(t)->scheduled_on != NO_CPU) {
@@ -667,7 +616,6 @@ static void gsnedf_task_exit(struct task_struct * t)
 	}
 	raw_spin_unlock_irqrestore(&gsnedf_lock, flags);
 
-	TRACE("GSN-EDF: task_exit 2.\n");
 	BUG_ON(!is_realtime(t));
         TRACE_TASK(t, "RIP\n");
 }
