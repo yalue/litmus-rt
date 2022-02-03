@@ -350,7 +350,7 @@ static void update_curr_litmus(struct rq *rq)
 	update_time_litmus(rq, p);
 }
 
-const struct sched_class litmus_sched_class = {
+DEFINE_SCHED_CLASS(litmus) = {
 	.enqueue_task		= enqueue_task_litmus,
 	.dequeue_task		= dequeue_task_litmus,
 	.yield_task		= yield_task_litmus,

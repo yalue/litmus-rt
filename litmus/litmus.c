@@ -32,6 +32,8 @@
 #include <trace/events/litmus.h>
 #endif
 
+extern int stop_cpus(const struct cpumask *cpumask, cpu_stop_fn_t fn, void *arg);
+
 /* Number of RT tasks that exist in the system */
 atomic_t rt_task_count 		= ATOMIC_INIT(0);
 
@@ -526,7 +528,7 @@ int switch_sched_plugin(struct sched_plugin* plugin)
 
 		cpus_read_lock();
 		atomic_set(&ready_to_switch, num_online_cpus());
-		err = stop_machine_cpuslocked(do_plugin_switch, plugin, NULL);
+		err = stop_cpus(cpu_online_mask, do_plugin_switch, plugin);
 		cpus_read_unlock();
 
 		if (!litmus->get_domain_proc_info(&domain_info))
