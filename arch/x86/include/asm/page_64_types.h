@@ -95,7 +95,12 @@
 #ifdef CONFIG_RANDOMIZE_BASE
 #define KERNEL_IMAGE_SIZE	(1024 * 1024 * 1024)
 #else
-#define KERNEL_IMAGE_SIZE	(512 * 1024 * 1024)
+/*
+ * In LITMUS^RT we always keep this at the larger size; as disabling kaslr
+ * is essential for GDB debugging, and the kernel image is larger with the
+ * debug info.
+ */
+#define KERNEL_IMAGE_SIZE	(1024 * 1024 * 1024)
 #endif
 
 #endif /* _ASM_X86_PAGE_64_DEFS_H */
