@@ -231,6 +231,7 @@ static struct miscdevice litmus_ctrl_dev = {
 	.name  = CTRL_NAME,
 	.minor = MISC_DYNAMIC_MINOR,
 	.fops  = &litmus_ctrl_fops,
+	.mode  = 0666,
 };
 
 static int __init init_litmus_ctrl_dev(void)

@@ -191,7 +191,7 @@ int __init init_litmus_proc(void)
 		return -ENOMEM;
 	}
 
-	curr_file = proc_create("active_plugin", 0644, litmus_dir,
+	curr_file = proc_create("active_plugin", 0666, litmus_dir,
 				&litmus_active_proc_ops);
 
 	if (!curr_file) {
@@ -201,7 +201,7 @@ int __init init_litmus_proc(void)
 	}
 
 #ifdef CONFIG_RELEASE_MASTER
-	release_master_file = proc_create("release_master", 0644, litmus_dir,
+	release_master_file = proc_create("release_master", 0666, litmus_dir,
 					  &litmus_release_master_proc_ops);
 	if (!release_master_file) {
 		printk(KERN_ERR "Could not allocate release_master "

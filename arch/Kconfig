@@ -1168,10 +1168,10 @@ config RANDOMIZE_KSTACK_OFFSET_DEFAULT
 	  config chooses the default boot state.
 
 config ARCH_OPTIONAL_KERNEL_RWX
-	def_bool n
+	def_bool y
 
 config ARCH_OPTIONAL_KERNEL_RWX_DEFAULT
-	def_bool n
+	def_bool y
 
 config ARCH_HAS_STRICT_KERNEL_RWX
 	def_bool n

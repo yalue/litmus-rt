@@ -45,6 +45,9 @@ struct control_page {
 	lt_t release;  /* Release time of current job */
 	uint64_t job_index; /* Job sequence number of current job */
 
+	// The task's slot (from 0 to k-1), if it's holding a k-exclusion lock.
+	uint64_t k_exclusion_slot;
+
 	/* to be extended */
 };
 
@@ -57,6 +60,7 @@ struct control_page {
 #define LITMUS_CP_OFFSET_DEADLINE	32
 #define LITMUS_CP_OFFSET_RELEASE	40
 #define LITMUS_CP_OFFSET_JOB_INDEX	48
+#define LITMUS_CP_K_EXCLUSION_SLOT	56
 
 /* System call emulation via ioctl() */
 
