@@ -1452,7 +1452,7 @@ static int gsnedf_kfmlp_close(struct litmus_lock *l)
 	spin_lock_irqsave(&(sem->wait.lock), flags);
 	slot = kfmlp_get_owner_slot(sem);
 	spin_unlock_irqrestore(&(sem->wait.lock), flags);
-	if (flags < 0) {
+	if (slot < 0) {
 		// We weren't holding the lock.
 		return 0;
 	}
