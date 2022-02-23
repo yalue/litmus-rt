@@ -1403,6 +1403,8 @@ static int gsnedf_kfmlp_unlock(struct litmus_lock *l)
 		spin_unlock_irqrestore(&(sem->wait.lock), flags);
 		return -EINVAL;
 	}
+	// Reset our "slot" to k + 1 to indicate we don't hold anything.
+	tsk_rt(t)->ctrl_page->k_exclusion_slot = sem->k + 1;
 	tsk_rt(t)->num_locks_held--;
 	if (tsk_rt(t)->inh_task) {
 		// In addition to clearing priority inheritance, make sure the
