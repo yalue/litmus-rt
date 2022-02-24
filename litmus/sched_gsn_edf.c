@@ -931,15 +931,6 @@ static struct litmus_lock* gsnedf_new_fmlp(void)
 	return &sem->litmus_lock;
 }
 
-// Unlike with regular FMLP it may not be obvious which lock owner is receiving
-// priority donation, so here we'll keep track of who's donating to who.
-struct kfmlp_hp_waiter {
-	struct task_struct *waiter;
-	// The index, in the owners array, of the task receiving the donation.
-	// -1 if not currently donating priority.
-	int donee_index;
-};
-
 /* For Nathan's k-FMLP locks */
 struct kfmlp_semaphore {
 	struct litmus_lock litmus_lock;
@@ -950,18 +941,6 @@ struct kfmlp_semaphore {
 	// The list of lock holders. At most the first k will be used, and will
 	// be NULL if available.
 	struct task_struct *owners[MAX_KFMLP_K];
-
-	// The list of up to k highest-priority waiters. Only the first k
-	// entries in this will be used.
-	//
-	// TODO: Replace this with a sorted list, kept sorted on insert/removal
-	struct kfmlp_hp_waiter hp_waiters[MAX_KFMLP_K];
-
-	// The index of the lowest-priority of the hp_waiters.
-	int lowest_hp_waiter;
-
-	// The total number of waiters in the lock's wait queue.
-	int num_waiters;
 
 	/* FIFO queue of waiting tasks */
 	wait_queue_head_t wait;
@@ -990,21 +969,6 @@ static int kfmlp_get_free_slot_index(struct kfmlp_semaphore *sem)
 	return -1;
 }
 
-// Returns nonzero if we actually have been assigned a slot in the given
-// k-exclusion lock. Returns zero otherwise. Used to check whether we were
-// woken up due to holding a lock or whether we were just spuriously woken up.
-// Trusts the control page.
-static int verify_kfmlp_ownership(struct kfmlp_semaphore *sem)
-{
-	struct task_struct *t = current;
-	// Side note, this shouldn't have been trashed by the user process, as
-	// the task should have remained suspended or in kernel code prior to
-	// this check.
-	int slot = tsk_rt(t)->ctrl_page->k_exclusion_slot;
-	if (slot > ((uint64_t) sem->k)) return 0;
-	return sem->owners[slot] == t;
-}
-
 // Returns a non-negative value, indicating current's slot in sem->owners, if
 // current is a lock owner. Doesn't trust the control page.
 static int kfmlp_get_owner_slot(struct kfmlp_semaphore *sem)
@@ -1017,174 +981,44 @@ static int kfmlp_get_owner_slot(struct kfmlp_semaphore *sem)
 	return -1;
 }
 
-// Returns the index (between 0 and k - 1, inclusive) of the lock owner with
-// the highest priority, so long as it has lower priority than t. Returns -1 if
-// none of the lock owners have lower priority than t.
-// TODO: Reexamine find_highest_lp_owner. May be good to boost the lowest non-
-// boosted owner instead.
-static int kfmlp_find_highest_lp_owner(struct kfmlp_semaphore *sem,
-	struct task_struct *t)
+// Copied from sched_psn_edf.c/sched_pfp.c, and modified a little. Boosts the
+// priority of the current task only. Must be called while already holding the
+// lock for an individual KFMLP semaphore.
+static void boost_priority(void)
 {
-	struct task_struct *candidate = NULL;
-	struct task_struct *owner = NULL;
-	int to_return = -1;
-	int i;
-	for (i = 0; i < sem->k; i++) {
-		owner = sem->owners[i];
-		if (!owner) continue;
-		// Ignore tasks that are already inheriting priority from
-		// something else.
-		if (tsk_rt(owner)->inh_task) continue;
-		// Ignore tasks that are already higher priority than t.
-		if (edf_higher_prio(owner, t)) continue;
-		if (!candidate) {
-			// This is the first task we've seen with lower
-			// priority.
-			candidate = owner;
-			to_return = i;
-			continue;
-		}
-		// Ignore this task if we've already seen one that's higher
-		// priority.
-		if (edf_higher_prio(candidate, owner)) continue;
-		// We've found the next highest-priority lower-priority task.
-		candidate = sem->owners[i];
-		to_return = i;
-	}
-	return to_return;
+	struct task_struct *t = NULL;
+	lt_t now;
+	raw_spin_lock(&gsnedf_lock);
+	BUG_ON(!(is_current_running() && is_realtime(current)));
+	t = current;
+	now = litmus_clock();
+	TRACE_TASK(t, "priority boosted at %llu\n", now);
+	tsk_rt(t)->priority_boosted = 1;
+	tsk_rt(t)->boost_start_time = now;
+	// The boosted task is already running, so we shouldn't need to check
+	// for preemptions here.
+	raw_spin_unlock(&gsnedf_lock);
 }
 
-// Takes the index into the hp_waiters array and checks whether the
-// corresponding highest-priority waiter needs to donate priority to anything,
-// or updates the priority if there was already a donee and the waiter changed.
-static void kfmlp_check_hp_waiter_inheritance(struct kfmlp_semaphore *sem,
-	int i)
+// Undoes boost_priority for task t. Does nothing if t wasn't priority boosted.
+// Must be called while already holding the lock for an individual KFMLP
+// semaphore.
+static void unboost_priority(void)
 {
-	struct task_struct *waiter = sem->hp_waiters[i].waiter;
-	struct task_struct *donee = NULL;
-	int donee_index = sem->hp_waiters[i].donee_index;
-	if (donee_index != -1) {
-		donee = sem->owners[donee_index];
-		// NOTE: I don't know if this is necessary for the places where
-		// I use kfmlp_check_hp_waiter_inhertiance, but for sanity I
-		// remove the inheritance and recheck whether the waiter at
-		// slot i is actually higher priority than the owner it's
-		// supposed to donate to. This at least shouldn't break any of
-		// the logic.
-		if (tsk_rt(donee)->inh_task) {
-			clear_priority_inheritance(donee);
-		}
-		if (edf_higher_prio(waiter, donee)) {
-			set_priority_inheritance(donee, waiter);
-			return;
-		}
-		// At this point, the old donee is actually higher priority
-		// than waiter i, so we need to find a new donee if possible.
-		sem->hp_waiters[i].donee_index = -1;
-		donee_index = -1;
-	}
-
-	// We weren't donating priority, so see if we need to.
-	donee_index = kfmlp_find_highest_lp_owner(sem, waiter);
-	// Quit now if all lock holders are already higher priority.
-	if (donee_index < 0) return;
-	// Finally, donate our priority.
-	sem->hp_waiters[i].donee_index = donee_index;
-	set_priority_inheritance(sem->owners[donee_index], waiter);
-}
-
-// Returns the index of an HP waiter slot that is unoccupied. Bugs if all are
-// occupied. (Check ahead of time that sem->num_waiters is less than sem->k)
-static int kfmlp_find_empty_hp_waiter_slot(struct kfmlp_semaphore *sem)
-{
-	int i;
-	for (i = 0; i < sem->k; i++) {
-		if (!sem->hp_waiters[i].waiter) return i;
-	}
-	printk("Likely bug! kfmlp_find_empty_hp_waiter_slot called when all "
-		"slots are occupied\n");
-	BUG();
-	return -1;
-}
-
-// Returns the task_struct for the lowest-priority of the highest-priority
-// waiters. Returns NULL if there are no waiters.
-static struct task_struct* kfmlp_lowest_hp_waiter(struct kfmlp_semaphore *sem)
-{
-	if (sem->lowest_hp_waiter < 0) return NULL;
-	return sem->hp_waiters[sem->lowest_hp_waiter].waiter;
-}
-
-// Finds the new highest-priority waiter with the lowest priority.
-static void kfmlp_update_lp_hp_waiter(struct kfmlp_semaphore *sem)
-{
-	struct task_struct *candidate = NULL;
-	int candidate_index = -1;
-	int i;
-	for (i = 0; i < sem->k; i++)
-	{
-		if (sem->hp_waiters[i].waiter == NULL) continue;
-		if (candidate == NULL) {
-			candidate_index = i;
-			candidate = sem->hp_waiters[i].waiter;
-			continue;
-		}
-		if (edf_higher_prio(sem->hp_waiters[i].waiter, candidate)) {
-			// The current candidate is lower priority.
-			continue;
-		}
-		candidate = sem->hp_waiters[i].waiter;
-		candidate_index = i;
-	}
-	// The index will still correctly be -1 if there were no waiters.
-	sem->lowest_hp_waiter = candidate_index;
-}
-
-// To be called whenever a new waiter (t) has been added to sem's wait queue.
-// This function updates the list of highest-priority waiters (if t is a new
-// HP waiter), and sets priority inheritance appropriately. Also updates
-// sem->num_waiters.
-static void kfmlp_new_waiter_added(struct kfmlp_semaphore *sem,
-	struct task_struct *t)
-{
-	// Things this function does:
-	//  - If t isn't a HP waiter, return.
-	//  - If there were fewer than k HP waiters, just add t to the list,
-	//    and donate its priority if needed.
-	//  - If there were already k HP waiters, see if it's higher priority
-	//    than the LP waiter. If the LP waiter was donating its priority,
-	//    then donate t's priority instead. If it wasn't see if t needs to
-	//    donate priority. (handled in kfmlp_check_hp_waiter_inheritance)
-	int waiter_slot = -1;
-	if (sem->num_waiters < sem->k) {
-		// There are fewer than k waiters, so we're one of the top k
-		waiter_slot = kfmlp_find_empty_hp_waiter_slot(sem);
-		sem->hp_waiters[waiter_slot].waiter = t;
-		sem->hp_waiters[waiter_slot].donee_index = -1;
-		// See if we're lower priority than the prior lowest-priority
-		// waiter, if one existed.
-		if ((sem->lowest_hp_waiter < 0) ||
-			edf_higher_prio(kfmlp_lowest_hp_waiter(sem), t)) {
-			sem->lowest_hp_waiter = waiter_slot;
-		}
-		sem->num_waiters++;
-		kfmlp_check_hp_waiter_inheritance(sem, waiter_slot);
+	struct task_struct *t = NULL;
+	raw_spin_lock(&gsnedf_lock);
+	BUG_ON(!is_current_running());
+	t = current;
+	if (tsk_rt(t)->priority_boosted == 0) {
+		TRACE_TASK(t, "wasn't priority boosted");
+		raw_spin_unlock(&gsnedf_lock);
 		return;
 	}
-	if (edf_higher_prio(kfmlp_lowest_hp_waiter(sem), t)) {
-		// We're lower priority than the lowest-priority of the HP
-		// waiters, so we're not going to donate priority (yet, at
-		// least).
-		sem->num_waiters++;
-		return;
-	}
-	// We'll replace the lowest-priority HP waiter, and donate our priority
-	// to its donee instead.
-	waiter_slot = sem->lowest_hp_waiter;
-	sem->hp_waiters[waiter_slot].waiter = t;
-	kfmlp_check_hp_waiter_inheritance(sem, waiter_slot);
-	sem->num_waiters++;
-	kfmlp_update_lp_hp_waiter(sem);
+	TRACE_TASK(t, "priority restored at %llu\n", litmus_clock());
+	tsk_rt(t)->priority_boosted = 0;
+	tsk_rt(t)->boost_start_time = 0;
+	check_for_preemptions();
+	raw_spin_unlock(&gsnedf_lock);
 }
 
 // If t is in the wait queue, then remove its entry. The queue's lock must be
@@ -1205,95 +1039,11 @@ static void kfmlp_remove_from_wait_queue(struct kfmlp_semaphore *sem,
 	}
 	if (found) {
 		__remove_wait_queue(&(sem->wait), queue_entry);
-		TRACE("Removed task %d from kfmlp wait queue\n", (int) t->pid);
+		TRACE_TASK(t, "removed from kfmlp wait queue\n");
 	} else {
-		TRACE("Couldn't remove task %d from wait queue: not found\n",
-			(int) t->pid);
+		// This should probably be an error.
+		TRACE_TASK(t, "not found in kfmlp wait queue\n");
 	}
-}
-
-// Returns t's slot in the list of HP waiters, or -1 if it isn't an HP waiter.
-// waiter in exclude_slot. Set exclude_slot to -1 to check every HP waiter.
-static int kfmlp_get_hp_waiter_slot(struct kfmlp_semaphore *sem,
-	struct task_struct *t)
-{
-	int i;
-	for (i = 0; i < sem->k; i++) {
-		if (sem->hp_waiters[i].waiter == t) return i;
-	}
-	return -1;
-}
-
-// Searches through the wait queue to find a highest-priority waiter to fill an
-// empty slot. Returns NULL if there are no waiters that aren't already in HP
-// waiter slots. Simply returns the highest priority waiter that isn't in an HP
-// waiter slot already.
-static struct task_struct* kfmlp_find_new_hp_waiter(
-	struct kfmlp_semaphore *sem)
-{
-	struct list_head *pos;
-	wait_queue_entry_t *queue_entry = NULL;
-	struct task_struct *candidate = NULL;
-	struct task_struct *t = NULL;
-	list_for_each(pos, &(sem->wait.head)) {
-		queue_entry = (wait_queue_entry_t *) list_entry(pos,
-			wait_queue_entry_t, entry);
-		t = (struct task_struct *) queue_entry->private;
-		if (kfmlp_get_hp_waiter_slot(sem, t) >= 0) {
-			// Ignore waiters that are already HP.
-			continue;
-		}
-		if (!candidate || edf_higher_prio(t, candidate)) {
-			candidate = t;
-		}
-	}
-	return candidate;
-}
-
-// Replaces the highest-priority waiter with a new one from the wait queue.
-// This may occur when the waiter currently in the slot has either been granted
-// a lock slot (in which case it must have already been put in the correct
-// owners slot), or it may have been interrupted.
-static void kfmlp_replace_hp_waiter(struct kfmlp_semaphore *sem, int slot)
-{
-	struct task_struct *new_hp_waiter = NULL;
-	int old_donee_index = sem->hp_waiters[slot].donee_index;
-	if (!sem->hp_waiters[slot].waiter) {
-		TRACE("Error! Got invalid slot for replace_hp_waiter.\n");
-		return;
-	}
-	sem->hp_waiters[slot].waiter = NULL;
-	sem->hp_waiters[slot].donee_index = -1;
-	if (old_donee_index >= 0) {
-		clear_priority_inheritance(sem->owners[old_donee_index]);
-	}
-	new_hp_waiter = kfmlp_find_new_hp_waiter(sem);
-	if (new_hp_waiter) {
-		sem->hp_waiters[slot].waiter = new_hp_waiter;
-		kfmlp_check_hp_waiter_inheritance(sem, slot);
-	}
-
-	// We either removed or replaced a HP waiter with something that is
-	// lower-priority, so we may need to change the current lowest HP
-	// waiter. (We can skip this if we just replaced the lowest priority
-	// with something even lower.)
-	if (!new_hp_waiter || (slot != sem->lowest_hp_waiter)) {
-		kfmlp_update_lp_hp_waiter(sem);
-	}
-}
-
-// If t was interrupted without acquiring the lock, this function will clean it
-// up; removing it from the wait queue and from the list of HP waiters if it
-// was one of them.
-static void kfmlp_waiter_interrupted(struct kfmlp_semaphore *sem,
-	struct task_struct *t)
-{
-	int hp_waiter_slot;
-	kfmlp_remove_from_wait_queue(sem, t);
-	sem->num_waiters--;
-	hp_waiter_slot = kfmlp_get_hp_waiter_slot(sem, t);
-	if (hp_waiter_slot < 0) return;
-	kfmlp_replace_hp_waiter(sem, hp_waiter_slot);
 }
 
 static int gsnedf_kfmlp_lock(struct litmus_lock *l)
@@ -1308,7 +1058,7 @@ static int gsnedf_kfmlp_lock(struct litmus_lock *l)
 
 	// The FMLP doesn't support nested locking
 	if (tsk_rt(t)->num_locks_held > 0) {
-		TRACE("Preventing nested k-FMLP acquisition.\n");
+		printk("Preventing nested k-FMLP acquisition.\n");
 		spin_unlock_irqrestore(&(sem->wait.lock), flags);
 		return -EBUSY;
 	}
@@ -1322,6 +1072,7 @@ static int gsnedf_kfmlp_lock(struct litmus_lock *l)
 		sem->owners[i] = t;
 		tsk_rt(t)->num_locks_held++;
 		tsk_rt(t)->ctrl_page->k_exclusion_slot = i;
+		boost_priority();
 		spin_unlock_irqrestore(&(sem->wait.lock), flags);
 		return 0;
 	}
@@ -1337,9 +1088,7 @@ static int gsnedf_kfmlp_lock(struct litmus_lock *l)
 	//  - We can call __add_wait_queue_entry_tail because we already hold
 	//    the queue's spinlock.
 	__add_wait_queue_entry_tail_exclusive(&sem->wait, &wait);
-
-	// Handles all the priority inheritance junk.
-	kfmlp_new_waiter_added(sem, t);
+	TRACE_TASK(t, "starting to wait for lock\n");
 
 	// Actually suspend and wait.
 	TS_LOCK_SUSPEND;
@@ -1351,40 +1100,32 @@ static int gsnedf_kfmlp_lock(struct litmus_lock *l)
 	// priority, but I don't care that much because I expect this to never
 	// actually occur during experiments. Interruptible sleep is just
 	// *very* nice to have to avoid locking up the whole system.
-	if (!verify_kfmlp_ownership(sem)) {
-		// Ugh, interrupted; we didn't get the lock.
+	if (kfmlp_get_owner_slot(sem) < 0) {
+		// We didn't get the lock, so we must have woken up due to an
+		// interrupt.
 		spin_lock_irqsave(&(sem->wait.lock), flags);
 		// Check for the race condition where we may have been given
 		// the lock between being interrupted and taking the spinlock.
-		if (verify_kfmlp_ownership(sem)) {
+		if (kfmlp_get_owner_slot(sem) < 0) {
 			// We got the lock after all.
+			TRACE_TASK(t, "got kfmlp lock after interrupt\n");
 			tsk_rt(t)->num_locks_held++;
+			boost_priority();
 			spin_unlock_irqrestore(&(sem->wait.lock), flags);
 			return 0;
 		}
-		// Remove ourselves from the wait queue and the list of HP
-		// waiters if necessary.
-		kfmlp_waiter_interrupted(sem, t);
+		// Remove ourselves from the wait queue.
+		printk("kfmlp waiter (PID %d) interrupted\n", (int) t->pid);
+		kfmlp_remove_from_wait_queue(sem, t);
+		spin_unlock_irqrestore(&sem->wait.lock, flags);
 		return -EINTR;
 	}
+	TRACE_TASK(t, "got kfmlp lock\n");
 
 	// We got the lock!
 	tsk_rt(t)->num_locks_held++;
+	boost_priority();
 	return 0;
-}
-
-// This rechecks all highest-priority waiters that aren't currently donating
-// priority, and makes them donate priority if possible.
-static void kfmlp_recheck_priority_inheritance(struct kfmlp_semaphore *sem)
-{
-	int i = 0;
-	for (i = 0; i < sem->k; i++) {
-		// TODO: Change this function after making hp_waiters ordered.
-		if (!sem->hp_waiters[i].waiter) continue;
-		// TODO: Should we reassign this waiter to a different donee?
-		if (sem->hp_waiters[i].donee_index != -1) continue;
-		kfmlp_check_hp_waiter_inheritance(sem, i);
-	}
 }
 
 static int gsnedf_kfmlp_unlock(struct litmus_lock *l)
@@ -1394,53 +1135,33 @@ static int gsnedf_kfmlp_unlock(struct litmus_lock *l)
 	struct kfmlp_semaphore *sem = kfmlp_from_lock(l);
 	unsigned long flags = 0;
 	int owner_slot = -1;
-	int hp_waiter_slot = -1;
-	int i = 0;
 	spin_lock_irqsave(&(sem->wait.lock), flags);
 	owner_slot = kfmlp_get_owner_slot(sem);
 	if (owner_slot < 0) {
-		TRACE("Got kfmlp unlock from non-owner!\n");
+		printk("Got kfmlp unlock from non-owner!\n");
 		spin_unlock_irqrestore(&(sem->wait.lock), flags);
 		return -EINVAL;
 	}
+
 	// Reset our "slot" to k + 1 to indicate we don't hold anything.
 	tsk_rt(t)->ctrl_page->k_exclusion_slot = sem->k + 1;
 	tsk_rt(t)->num_locks_held--;
-	if (tsk_rt(t)->inh_task) {
-		// In addition to clearing priority inheritance, make sure the
-		// donor is no longer marked as donating.
-		clear_priority_inheritance(t);
-		for (i = 0; i < sem->k; i++) {
-			if (sem->hp_waiters[i].donee_index == owner_slot) {
-				sem->hp_waiters[i].donee_index = -1;
-			}
-		}
-	}
+	unboost_priority();
 	next = __waitqueue_remove_first(&(sem->wait));
-	sem->num_waiters--;
+
+	// We can return now if there are no more waiters.
 	if (!next) {
-		// There are no more waiters, so we can't have been inheriting
-		// priority. Simply clear our slot and return.
 		sem->owners[owner_slot] = NULL;
 		spin_unlock_irqrestore(&(sem->wait.lock), flags);
 		return 0;
 	}
+
+	// We got a new waiter. Give it the lock.
 	sem->owners[owner_slot] = next;
 	tsk_rt(next)->ctrl_page->k_exclusion_slot = owner_slot;
 
-	// See if the next task was a HP waiter. If so, we need to find a
-	// different HP waiter.
-	hp_waiter_slot = kfmlp_get_hp_waiter_slot(sem, next);
-	if (hp_waiter_slot >= 0) {
-		kfmlp_replace_hp_waiter(sem, hp_waiter_slot);
-	}
-	// Even if we didn't replace a HP waiter, we still may need to change
-	// priority donation due to a waiter previously donating to the task
-	// that issued this unlock call. To keep logic simpler, I'll just
-	// recheck all HP waiters to see if they can donate to a lock holder.
-	kfmlp_recheck_priority_inheritance(sem);
-
-	// Allow the next owner to start running.
+	// Allow the next owner to start running. It will boost its own
+	// priority.
 	wake_up_process(next);
 	spin_unlock_irqrestore(&(sem->wait.lock), flags);
 	return 0;
@@ -1474,15 +1195,15 @@ static struct litmus_lock* gsnedf_new_kfmlp(void* __user config)
 	struct kfmlp_semaphore *sem = NULL;
 	int k = -1;
 	if (get_user(k, (int *) config) != 0) {
-		TRACE("Failed getting k-value from user.\n");
+		printk("Failed getting k-value from user.\n");
 		return NULL;
 	}
 	if (k <= 0) {
-		TRACE("Got a non-positive k-value from user.\n");
+		printk("Got a non-positive k-value from user.\n");
 		return NULL;
 	}
 	if (k > MAX_KFMLP_K) {
-		TRACE("Got a value of k (%d) above the limit of %d.\n", k,
+		printk("Got a value of k (%d) above the limit of %d.\n", k,
 			MAX_KFMLP_K);
 		return NULL;
 	}
@@ -1491,7 +1212,6 @@ static struct litmus_lock* gsnedf_new_kfmlp(void* __user config)
 	if (!sem) return NULL;
 	memset(sem, 0, sizeof(*sem));
 	sem->k = k;
-	sem->lowest_hp_waiter = -1;
 	init_waitqueue_head(&sem->wait);
 	sem->litmus_lock.ops = &gsnedf_kfmlp_lock_ops;
 	return &(sem->litmus_lock);
