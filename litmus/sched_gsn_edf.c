@@ -1106,7 +1106,7 @@ static int gsnedf_kfmlp_lock(struct litmus_lock *l)
 		spin_lock_irqsave(&(sem->wait.lock), flags);
 		// Check for the race condition where we may have been given
 		// the lock between being interrupted and taking the spinlock.
-		if (kfmlp_get_owner_slot(sem) < 0) {
+		if (kfmlp_get_owner_slot(sem) > 0) {
 			// We got the lock after all.
 			TRACE_TASK(t, "got kfmlp lock after interrupt\n");
 			tsk_rt(t)->num_locks_held++;
