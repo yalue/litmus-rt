@@ -4121,12 +4121,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	 */
 	smp_cond_load_acquire(&p->on_cpu, !VAL);
 
-	/* LITMUS^RT: once the task can be safely referenced by this
-	 * CPU, don't mess with Linux load balancing stuff.
-	 */
-	if (is_realtime(p))
-		goto litmus_out_activate;
-
 	cpu = select_task_rq(p, p->wake_cpu, wake_flags | WF_TTWU);
 	if (task_cpu(p) != cpu) {
 		if (p->in_iowait) {
@@ -4139,7 +4133,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		set_task_cpu(p, cpu);
 	}
 
-litmus_out_activate:
 #else
 	cpu = task_cpu(p);
 #endif /* CONFIG_SMP */
